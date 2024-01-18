@@ -23,6 +23,9 @@ How do I test the code to ensure the build is correct?
   
 ## Team Members
  Sairaj naik guguloth
-   Bangqi Liu
-   Pengcheng Xu
-   Qingyang Zeng
+  
+  Bangqi Liu
+  
+  Pengcheng Xu
+  
+  Qingyang Zeng
