@@ -1,4 +1,4 @@
-# PROJECT NAME
+# Data extraction from PDF documents
 A template repository for student software development teams to use in for coursework
 
 ## Your next steps
