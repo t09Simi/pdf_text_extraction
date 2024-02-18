@@ -1,9 +1,11 @@
 cffi==1.16.0
 charset-normalizer==3.3.2
 cryptography==42.0.2
+et-xmlfile==1.1.0
+openpyxl==3.1.2
 packaging==23.2
-pdfminer
-pdfminer.six
+pdfminer==20191125
+pdfminer.six==20221105
 pdfplumber==0.10.3
 pillow==10.2.0
 pycparser==2.21
@@ -12,3 +14,4 @@ PyMuPDFb==1.23.9
 PyPDF2==3.0.1
 pypdfium2==4.27.0
 pytesseract==0.3.10
+typing_extensions==4.9.0

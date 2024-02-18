@@ -30,8 +30,8 @@ def main():
         print(f"No text found")
     else:
         found_keyword = search_keyword(text_content, keywords)
-        if found_keyword:
-            print(f"keyword found : {found_keyword}")
+        print(f"keyword found : {found_keyword}")
+        if found_keyword and found_keyword == "Sparrows":
             sparrow_extraction.extract_sparrow_pdf(pdf_path)
         else:
             print(f"No matching keywords found")
