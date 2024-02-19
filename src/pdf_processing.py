@@ -1,5 +1,6 @@
 import sparrow_extraction
 import pdfplumber
+import centurion_extraction
 
 
 def pdf_to_text(pdf_path):
@@ -22,9 +23,9 @@ def is_empty(text):
 
 
 def main():
-    pdf_path = "../resources/sparrows.pdf"
+    pdf_path = "../resources/centurion.pdf"
     text_content = pdf_to_text(pdf_path)
-    keywords = ["Sparrows", "keyword2"]
+    keywords = ["Sparrows", "Centurion"]
 
     if is_empty(text_content):
         print(f"No text found")
@@ -33,6 +34,8 @@ def main():
         print(f"keyword found : {found_keyword}")
         if found_keyword and found_keyword == "Sparrows":
             sparrow_extraction.extract_sparrow_pdf(pdf_path)
+        elif found_keyword and found_keyword == "Centurion":
+            centurion_extraction.extraction_centurion_pdf(pdf_path)
         else:
             print(f"No matching keywords found")
 
