@@ -3,7 +3,7 @@ import pdfplumber
 from openpyxl import load_workbook
 from datetime import datetime
 
-import interim_centurion_excel_test
+import excel_management
 
 def get_manufacture(description: str):
     workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
@@ -97,15 +97,15 @@ def extraction_centurion_pdf(pdf_path):
             table_data3 = first_table[2]
             # data4: Provide related Value
             table_data4 = first_table[4]
-            certificate_numbers, description, wwl, next_thorough = None, None, None, None
+            id_numbers, description, wwl, next_thorough = None, None, None, None
             quantity = 1
 
             for index in range(0, len(table_data3)):
                 if table_data3[index] is None:
                     continue
                 text_to_compare = table_data3[index].lower()
-                if not certificate_numbers and "certificate" in text_to_compare:
-                    certificate_numbers = table_data4[index].strip()
+                if not id_numbers and "certificate" in text_to_compare:
+                    id_numbers = table_data4[index].strip()
                 elif not description and "description" in text_to_compare:
                     description = table_data4[index].replace('\n', ' ')
                 elif not wwl and "limit" in text_to_compare:
@@ -115,15 +115,15 @@ def extraction_centurion_pdf(pdf_path):
                     date_obj = datetime.strptime(date_string, "%d/%m/%Y")
                     next_thorough = date_obj.strftime("%d/%m/%Y")
 
-            if certificate_numbers:
+            if id_numbers:
                 page_info = dict()
                 if description:
-                    page_info["Description"] = description.split(':')[0]
+                    page_info["Item Description"] = description.split(':')[0]
                     manufacturer, model = get_manufacture(description)
                     page_info["Manufacturer"] = manufacturer
                     page_info["Model"] = model
-                page_info["WWL"] = wwl
-                page_info["Next Examination"] = next_thorough
+                page_info["SWL"] = wwl
+                page_info["Next Inspection Due Date"] = next_thorough
                 # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
                 table_data1_mapping = dict()
                 table_data1 = table_data1.splitlines()
@@ -135,15 +135,16 @@ def extraction_centurion_pdf(pdf_path):
                         formattted_key = key.lower().replace(" ", "").replace("/", "").replace(".", "")
                         table_data1_mapping[formattted_key] =value.strip()
 
-                page_info["Ref No"] = table_data1_mapping["custrefpono"]
-                page_info["Previous Examination"] = table_data1_mapping["dateofexamination"]
+                page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
+                page_info["Certificate No"] = page_info["Provider Identification"]
+                page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
 
 
                 if quantity > 1:
-                    identification_number_list = get_identification_number_list(certificate_numbers, quantity)
+                    identification_number_list = get_identification_number_list(id_numbers, quantity)
                 else:
                     identification_number_list = list()
-                    identification_number_list.append(certificate_numbers)
+                    identification_number_list.append(id_numbers)
 
                 for identification_number in identification_number_list:
                     extraction_info[identification_number] = page_info
@@ -152,7 +153,7 @@ def extraction_centurion_pdf(pdf_path):
             else:
                 print("No identification error")
     print(len(extraction_info.keys()))
-    interim_centurion_excel_test.update_excel(extraction_info, "Centurion")
+    excel_management.update_excel(extraction_info, "Centurion")
 
 
 if __name__ == "__main__":
