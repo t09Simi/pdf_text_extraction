@@ -174,7 +174,6 @@ def extraction_centurion_pdf(pdf_path):
                         description = table_data4[index].replace('\n', ' ')
                         serial_numbers = table_data5[index].split(":")[-1].strip()
                         quantity = extract_quantity(table_data4[index])
-                        print("quantity: ", quantity)
                     elif not wwl and "wwl" in text_to_compare:
                         wwl = table_data4[index].strip()
                     elif not next_thorough and "next" in text_to_compare:

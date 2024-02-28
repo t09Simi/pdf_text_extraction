@@ -23,7 +23,7 @@ def is_empty(text):
 
 
 def main():
-    pdf_path = "../resources/sparrows.pdf"
+    pdf_path = "../resources/centurion.pdf"
     text_content = pdf_to_text(pdf_path)
     keywords = ["Sparrows", "Centurion"]
 
