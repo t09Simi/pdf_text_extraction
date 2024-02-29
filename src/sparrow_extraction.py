@@ -112,6 +112,7 @@ def extract_sparrow_pdf(pdf_path):
                     page_info["Model"] = model
                 page_info["SWL"] = swl
                 # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
+
                 table_data1_mapping = dict()
                 for data in table_data1:
                     data_list = data.split(':')
