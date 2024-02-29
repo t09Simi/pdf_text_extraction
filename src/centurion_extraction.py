@@ -39,7 +39,7 @@ def get_identification_parts_list(input_string: str, quantity: int):
 
 
 def get_identification_number_list(identification_numbers: str, quantity: int):
-    #Take this as example (D971-1 to 6) or (MGL1 to MGL36)
+    identification_number_list = []
     if "to" in identification_numbers.lower():
         # identification_number_first_part = D971-1 or MGL1
         identification_number_first_part = identification_numbers.split("to")[0].strip()
@@ -76,82 +76,224 @@ def get_identification_number_list(identification_numbers: str, quantity: int):
     return identification_number_list
 
 
+def extract_quantity(text):
+    match = re.match(r'^\s*(\d+)\s+\d*', text)
+    if match:
+        return int(match.group(1))
+    else:
+        return None
+
+
 def extraction_centurion_pdf(pdf_path):
     print("<------------extracting centurion pdf------------>")
     pdf = pdfplumber.open(pdf_path)
     extraction_info = dict()
     for i in range(0, len(pdf.pages)):
-        if i > 44:
-            break
+        if i <= 47:
 
-        page = pdf.pages[i]
-        if page.extract_tables():
-            print("page number:", i)
+            page = pdf.pages[i]
+            if page.extract_tables():
+                print("page number:", i)
+                page_tables = page.extract_tables()
+                first_table = page_tables[0]
+                # data1:Report Number / Date of Examination / Ref No
+                table_data1 = first_table[0][13]
+                # data2: Identify Company keywords
+                table_data2 = first_table[1]
+                # data3: Identify Text keywords
+                table_data3 = first_table[2]
+                # data4: Provide related Value
+                table_data4 = first_table[4]
+                # data5 ID number Value
+                table_data5 = first_table[5]
+                identification_number_list = list()
+                if i < 27:
+
+                    id_numbers, description, wwl, next_thorough = None, None, None, None
+                    quantity = 1
+
+                    for index in range(0, len(table_data3)):
+                        if table_data3[index] is None:
+                            continue
+                        text_to_compare = table_data3[index].lower()
+                        if not description and "description" in text_to_compare:
+                            description = table_data4[0].replace('\n', ' ')
+                            serial_numbers = table_data5[index].split(":")[-1].strip()
+                        elif not wwl and "working" in text_to_compare:
+                            wwl = table_data4[index].strip()
+                        elif not next_thorough and "next" in text_to_compare:
+                            date_string = table_data4[index].strip()
+                            date_obj = datetime.strptime(date_string, "%d/%m/%Y")
+                            next_thorough = date_obj.strftime("%d/%m/%Y")
+                        elif not id_numbers and "certificate" in text_to_compare:
+                            id_numbers = table_data4[index].strip()
+
+                    if id_numbers:
+                        page_info = dict()
+                        if description:
+                            page_info["Item Description"] = description.split(':')[0]
+                            manufacturer, model = get_manufacture(description)
+                            page_info["Manufacturer"] = manufacturer
+                            page_info["Model"] = model
+                        page_info["SWL"] = wwl
+                        page_info["Next Inspection Due Date"] = next_thorough
+                        # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
+                        table_data1_mapping = dict()
+                        table_data1 = table_data1.splitlines()
+
+                        for data in table_data1:
+                            data_list = data.split(':', 1)
+                            if len(data_list) == 2:
+                                key, value = data_list
+                                formattted_key = key.lower().replace(" ", "").replace("/", "").replace(".", "")
+                                table_data1_mapping[formattted_key] = value.strip()
+
+                        page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
+                        page_info["Certificate No"] = page_info["Provider Identification"]
+                        page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
+
+                        id_numbers = serial_numbers
+
+                        if quantity == 1:
+                            identification_number_list.append(id_numbers)
+
+                        for identification_number in identification_number_list:
+                            extraction_info[identification_number] = page_info
+
+                    else:
+                        print("No identification error")
+                elif 27 < i < 48:
+                    quantity, id_numbers, description, wwl, next_thorough = None, None, None, None, None
+                    for index in range(0, len(table_data3)):
+                        if table_data3[index] is None:
+                            continue
+                        text_to_compare = table_data3[index].lower()
+                        if not description and "description" in text_to_compare:
+                            description = table_data4[index].replace('\n', ' ')
+                            serial_numbers = table_data5[index].split(":")[-1].strip()
+                            quantity = extract_quantity(table_data4[index])
+                        elif not wwl and "working" in text_to_compare:
+                            wwl = table_data4[index].strip()
+                        elif not next_thorough and "next" in text_to_compare:
+                            date_string = table_data4[index].strip()
+                            date_obj = datetime.strptime(date_string, "%d/%m/%Y")
+                            next_thorough = date_obj.strftime("%d/%m/%Y")
+                        elif not id_numbers and "certificate" in text_to_compare:
+                            id_numbers = table_data4[index].strip()
+
+                    if id_numbers:
+                        page_info = dict()
+                        if description:
+                            page_info["Item Description"] = description.split(':')[0]
+                            manufacturer, model = get_manufacture(description)
+                            page_info["Manufacturer"] = manufacturer
+                            page_info["Model"] = model
+                        page_info["SWL"] = wwl
+                        page_info["Next Inspection Due Date"] = next_thorough
+                        # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
+                        table_data1_mapping = dict()
+                        table_data1 = table_data1.splitlines()
+
+                        for data in table_data1:
+                            data_list = data.split(':', 1)
+                            if len(data_list) == 2:
+                                key, value = data_list
+                                formattted_key = key.lower().replace(" ", "").replace("/", "").replace(".", "")
+                                table_data1_mapping[formattted_key] = value.strip()
+
+                        page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
+                        page_info["Certificate No"] = page_info["Provider Identification"]
+                        page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
+
+                        id_numbers = serial_numbers
+
+                        if quantity > 1:
+                            identification_number_list = get_identification_number_list(id_numbers, quantity)
+
+                        for identification_number in identification_number_list:
+                            extraction_info[identification_number] = page_info
+
+                        # print(identification_numbers, page_info)
+                    else:
+                        print("No identification error")
+
+        if i > 47:
+            page = pdf.pages[i]
+            text = page.extract_text()
+
+            # data1: Certificate No.
+            certificate_no = None
+            certificate_match = re.search(r'Certificate No\. :\s*(\d+)', text)
+            if certificate_match:
+                print("page number:", i)
+                certificate_no = certificate_match.group(1)
+
             page_tables = page.extract_tables()
             first_table = page_tables[0]
-            # data1:Report Number / Date of Examination / Ref No
-            table_data1 = first_table[0][13]
-            # data2: Identify Company keywords
-            table_data2 = first_table[1]
-            # data3: Identify Text keywords
-            table_data3 = first_table[2]
-            # data4: Provide related Value
-            table_data4 = first_table[4]
-            id_numbers, description, wwl, next_thorough = None, None, None, None
+            # data2: wwl
+            table_data1 = first_table[3]
+            # data3: description, manufacturer
+            table_data2 = first_table[9]
+            table_data4 = first_table[10]
+            # data4: previous inspection
+            table_data3 = first_table[14]
+            # data5: ID Number
+            table_data5 = first_table[2]
+
+            identification_number_list = list()
+
+            id_numbers, wwl, pre_date = None, None, None
+            id_data = table_data5[0]
+            id_match = re.search(r'\)\s*([^\s]+)', id_data)
+            if id_match:
+                id_numbers = id_match.group(1)
+
+            wwl_data = table_data1[0]
+            wwl_match = re.search(r'(\d+(\.\d+)?\s*t)', wwl_data)
+            if wwl_match:
+                wwl = wwl_match.group(1)
+
+            pre_data = table_data3[0]
+            pre_match = re.search(r'(\d{2}-\d{2}-\d{4})', pre_data)
+            if pre_match:
+                pre_value = pre_match.group(1)
+                pre_date = pre_value.replace('-', '/')
+
+            description, next_thorough, provider, manufacturer, model = None, None, None, None, None
             quantity = 1
 
-            for index in range(0, len(table_data3)):
-                if table_data3[index] is None:
+            for index in range(0, len(table_data2)):
+                if table_data2[index] is None:
                     continue
-                text_to_compare = table_data3[index].lower()
-                if not id_numbers and "certificate" in text_to_compare:
-                    id_numbers = table_data4[index].strip()
-                elif not description and "description" in text_to_compare:
+                text_to_compare = table_data2[index].lower()
+                if not description and 'description' in text_to_compare:
                     description = table_data4[index].replace('\n', ' ')
-                elif not wwl and "limit" in text_to_compare:
-                    wwl = table_data4[index].strip()
-                elif not next_thorough and "next" in text_to_compare:
-                    date_string = table_data4[index].strip()
-                    date_obj = datetime.strptime(date_string, "%d/%m/%Y")
-                    next_thorough = date_obj.strftime("%d/%m/%Y")
+                    manufacturer_data = table_data4[1]
+                    manufacturer_match = re.match(r"(\w+\s+\w+)", manufacturer_data)
+                    if manufacturer_match:
+                        manufacturer = manufacturer_match.group(0)
+
 
             if id_numbers:
                 page_info = dict()
                 if description:
                     page_info["Item Description"] = description.split(':')[0]
-                    manufacturer, model = get_manufacture(description)
                     page_info["Manufacturer"] = manufacturer
                     page_info["Model"] = model
-                page_info["SWL"] = wwl
-                page_info["Next Inspection Due Date"] = next_thorough
-                # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
-                table_data1_mapping = dict()
-                table_data1 = table_data1.splitlines()
+                    page_info["SWL"] = wwl
+                    page_info["Certificate No"] = certificate_no
+                    page_info["Next Inspection Due Date"] = next_thorough
+                    page_info["Provider Identification"] = provider
+                    page_info["Previous Inspection"] = pre_date
 
-                for data in table_data1:
-                    data_list = data.split(':', 1)
-                    if len(data_list) ==2:
-                        key, value = data_list
-                        formattted_key = key.lower().replace(" ", "").replace("/", "").replace(".", "")
-                        table_data1_mapping[formattted_key] =value.strip()
+                    if quantity == 1:
+                        identification_number_list.append(id_numbers)
 
-                page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
-                page_info["Certificate No"] = page_info["Provider Identification"]
-                page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
-
-
-                if quantity > 1:
-                    identification_number_list = get_identification_number_list(id_numbers, quantity)
-                else:
-                    identification_number_list = list()
-                    identification_number_list.append(id_numbers)
-
-                for identification_number in identification_number_list:
-                    extraction_info[identification_number] = page_info
-
-                # print(identification_numbers, page_info)
+                    for identification_number in identification_number_list:
+                        extraction_info[identification_number] = page_info
             else:
                 print("No identification error")
+
     print(len(extraction_info.keys()))
     excel_management.update_excel(extraction_info, "Centurion")
 
