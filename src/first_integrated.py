@@ -149,16 +149,20 @@ def process_table1(table, extraction_info):
            # print("SWL:", swl_match)
 
         # Extract Description between ID Number and SWL
-        start_index = id_match.end() if id_match else 0
-        end_index = swl_match.start() if swl_match else len(row_text)
-        description = row_text[start_index:end_index].strip()
-        description = re.sub(r'\([^)]*\)\s*', '', description)
-        page_info["Item Description"] = description
+        if id_match:
+            start_index = id_match.end()
+            if swl_match:
+                end_index = swl_match.start()
+            else:
+                end_index = -1
+            description = row_text[start_index:end_index].strip()
+            description = re.sub(r'\([^)]*\)\s*', '', description)
+            page_info["Item Description"] = description
 
-        #Get manufacture and model fro  description
-        manufacture, model = get_manufacture_model(description)
-        page_info["Manufacturer"] = manufacture
-        page_info["Model"] = model
+            #Get manufacture and model fro  description
+            manufacture, model = get_manufacture_model(description)
+            page_info["Manufacturer"] = manufacture
+            page_info["Model"] = model
 
         # Extract Date of Next Inspection
         next_inspection_pattern = re.compile(r'(\d{2}/\d{2}/\d{4})$', re.IGNORECASE)
