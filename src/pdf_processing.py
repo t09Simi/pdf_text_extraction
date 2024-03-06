@@ -49,7 +49,7 @@ def pdf_to_img(pdf_path, images_path):
 
 
 def main():
-    pdf_path = "../resources/EnerMech.pdf"
+    pdf_path = "../resources/centurion.pdf"
     images_path = "../resources/images"
     text_content = pdf_to_text(pdf_path)
     keywords = ["Sparrows", "Centurion", "First Integrated"]

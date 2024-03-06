@@ -1,9 +1,61 @@
+import json
+from datetime import datetime
+import boto3
 import re
 import pdfplumber
+from io import BytesIO
 from openpyxl import load_workbook
-from datetime import datetime
 
-import excel_management
+s3 = boto3.client('s3')
+lambda_client = boto3.client('lambda')
+
+
+def move_pdf_to_out_bucket(source_bucket, object_key, file_content):
+    target_bucket = 'pdf-out-bucket'
+    # Get the current date in the format YYYY-MM-DD
+    current_date = datetime.now().strftime('%Y-%m-%d')
+
+    # Check if the folder with the current date exists in the target S3 bucket
+    target_folder_key = f'{current_date}/{object_key}'
+
+    # Check if the folder exists
+    existing_objects = s3.list_objects(Bucket=target_bucket, Prefix=f'{current_date}/')
+
+    if 'Contents' not in existing_objects:
+        # Folder doesn't exist, create it
+        s3.put_object(Body='', Bucket=target_bucket, Key=f'{current_date}/')
+
+    # Upload the file to the target S3 bucket and folder
+    s3.put_object(Body=file_content, Bucket=target_bucket, Key=target_folder_key)
+    print(f"File moved to the target bucket: {target_bucket}, Folder: {current_date}")
+
+    # Delete the original file from the source bucket (uncomment if needed)
+    s3.delete_object(Bucket=source_bucket, Key=object_key)
+    print(f"File deleted from source bucket: {source_bucket}, file: {object_key}")
+
+
+def invoke_excel_management_lambda(source_bucket, object_key, file_content, extracted_data, sheet_name):
+    # Payload to pass to the second Lambda function
+    payload = {
+        'extracted_data': extracted_data,
+        'sheet_name': sheet_name
+    }
+
+    # Invoke the second Lambda function asynchronously
+    response = lambda_client.invoke(
+        FunctionName='excel_management',
+        InvocationType='Event',
+        Payload=json.dumps(payload)
+    )
+
+    # Optionally, you can check the response for success or handle errors
+    status_code = response['StatusCode']
+    if status_code == 202:
+        print(f" Lambda function: excel_management invoked successfully.")
+        move_pdf_to_out_bucket(source_bucket, object_key, file_content)
+    else:
+        print(f"Error invoking Lambda function: excel_management. Status code: {status_code}")
+
 
 def get_manufacture(description: str):
     workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
@@ -22,6 +74,14 @@ def get_manufacture(description: str):
             model = keyword
             break
     return manufacture, model
+
+
+def extract_quantity(text):
+    match = re.match(r'^\s*(\d+)\s+\d*', text)
+    if match:
+        return int(match.group(1))
+    else:
+        return None
 
 
 def get_identification_parts_list(input_string: str, quantity: int):
@@ -76,21 +136,15 @@ def get_identification_number_list(identification_numbers: str, quantity: int):
     return identification_number_list
 
 
-def extract_quantity(text):
-    match = re.match(r'^\s*(\d+)\s+\d*', text)
-    if match:
-        return int(match.group(1))
-    else:
-        return None
-
-
-def extraction_centurion_pdf(pdf_path):
-    print("<------------extracting centurion pdf------------>")
-    pdf = pdfplumber.open(pdf_path)
+def extraction_centurion_pdf(source_bucket, object_key):
+    print("<-------------extracting centurion pdf------------>")
+    pdf_file = s3.get_object(Bucket=source_bucket, Key=object_key)
+    file_content = pdf_file['Body'].read()
+    pdf_doc = pdfplumber.open(BytesIO(file_content))
     extraction_info = dict()
-    for i, page in enumerate(pdf.pages):
+    for i, page in enumerate(pdf_doc.pages):
         text = page.extract_text()
-        page = pdf.pages[i]
+        page = pdf_doc.pages[i]
         if "Centurion" in text and "Hendrik" not in text:
 
             if page.extract_tables():
@@ -220,7 +274,7 @@ def extraction_centurion_pdf(pdf_path):
                         print("No identification error")
 
         elif "Hendrik" in text:
-            page = pdf.pages[i]
+            page = pdf_doc.pages[i]
             text = page.extract_text()
 
             # data1: Certificate No.
@@ -299,17 +353,12 @@ def extraction_centurion_pdf(pdf_path):
             print("No verified company found")
 
     print(len(extraction_info.keys()))
-    excel_management.update_excel(extraction_info, "Centurion")
+    invoke_excel_management_lambda().update_excel(extraction_info, "Centurion")
 
 
-if __name__ == "__main__":
-    extraction_centurion_pdf("../resources/centurion.pdf")
-
-
-
-
-
-
-
-
-
+def lambda_handler(event, context):
+    # Parse the payload from the event
+    source_bucket = event['source_bucket']
+    object_key = event['object_key']
+    print(f"Received payload from the first Lambda function. Source bucket: {source_bucket}, Object key: {object_key}")
+    extraction_centurion_pdf(source_bucket, object_key)
