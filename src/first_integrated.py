@@ -3,6 +3,7 @@ import pdfplumber
 from openpyxl import load_workbook
 import excel_management
 
+
 def split_id_numbers_with_range(id_numbers):
     new_id_numbers = []
     for id_number in id_numbers:
@@ -32,6 +33,7 @@ def split_id_numbers_with_range(id_numbers):
 
     return new_id_numbers
 
+
 def get_manufacture_model(description: str):
     workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
     manufacturer_sheet = workbook['Manufacture']
@@ -50,40 +52,134 @@ def get_manufacture_model(description: str):
             break
     return manufacture, model
 
+
 def contains_keyword(first_row, keyword):
-    #for row in table:
-        if first_row is not None:
-            row_text = ' '.join(cell if cell is not None else '' for cell in first_row)
-            #print("Checking row:", first_row)
-            if row_text.lower().startswith(keyword.lower()):
-                #print("Keyword found in row:", row_text)
-                return True
-        return False
+    if first_row is not None:
+        row_text = ' '.join(cell if cell is not None else '' for cell in first_row)
+        if row_text.lower().startswith(keyword.lower()):
+            return True
+    return False
+
 
 # Call to the First Integrated PDF
 def extract_first_integrated_pdf(pdf_path):
     print("<------------extracting first_integrated pdf------------>")
     pdf_doc = pdfplumber.open(pdf_path)
     extraction_info = dict()
-    for page_number, page in enumerate(pdf_doc.pages):
+    for i in range(0, len(pdf_doc.pages)):
+    # for page_number, page in enumerate(pdf_doc.pages()):
+        page = pdf_doc.pages[i]
         page_tables = page.extract_tables()
-        print("page number:", page_number)
-        for table in page_tables:
-            first_row = table[0]
-            if contains_keyword(first_row, "Name &AddressofManufacturer"):
-                process_table3(table, extraction_info)
-            elif contains_keyword(first_row, "Date of Thorough Examination"):
-                process_table2(table, extraction_info)
-            else:
-                process_table1(table, extraction_info)
+        #print("page number:", i)
+        #print("page tables:", page_tables)
+        if not page_tables:
+            print(f"No tables found on page {i}. Skipping...")
+            continue
+
+        first_row = page_tables[0][0]
+
+        if contains_keyword(first_row, "Name & Address of employer for Whom the examination was made"):
+            process_table_type1(page_tables, extraction_info)
+        elif contains_keyword(first_row, "Date of Thorough Examination"):
+            process_table_type2(page_tables[0], extraction_info)
+        elif contains_keyword(first_row, "Name &AddressofManufacturer") or contains_keyword(first_row, "Name & Address of Manufacturer"):
+            process_table_type3(page_tables[0], extraction_info)
+        else:
+            print("No recognized table found on page", i)
 
     excel_management.update_excel(extraction_info, "First Integrated")
 
 
-def process_table2(table, extraction_info):
+def process_table_type1(page_tables, extraction_info):
+    id_number = None
+    id_pattern = re.compile(r'(\(\w+\)\s*)?[A-Z]{3}\d+')
+    swl_pattern = re.compile(r'(\d+\.\d+)\s+(Tonnes|Kilos)\s', re.IGNORECASE)
+    row_data = dict()
+    report_ref_no, date_of_thorough_examination = None, None
+
+    for page in page_tables:
+        for index, row in enumerate(page):
+            page_info = {}
+            row_text = ' '.join(cell if cell is not None else '' for cell in row)
+
+            if "Name & Address of employer" in row_text:
+                continue        # Skip this row
+                # Extract ID Number
+            id_match = id_pattern.search(row_text)
+            if id_match:
+                id_number = id_match.group()
+                #print("id_number",id_number)
+                #page_info["Id Number"] = id_number
+
+                # Extract SWL
+                swl_match = swl_pattern.search(row_text)
+                if swl_match:
+                    swl_value = swl_match.group(1)
+                    swl_units = swl_match.group(2)
+                    swl_note = None
+                    page_info["SWL Value"] = swl_value
+                    page_info["SWL Unit"] = swl_units
+                    page_info["SWL Note"] = swl_note
+
+                # Extract Description between ID Number and SWL
+                if id_match:
+                    start_index = id_match.end()
+                    if swl_match:
+                        end_index = swl_match.start()
+                    else:
+                        end_index = -1
+                    description = row_text[start_index:end_index].strip()
+                    description = re.sub(r'\([^)]*\)\s*', '', description)
+                    page_info["Item Description"] = description
+                    #print("description", description)
+
+                    #Get manufacture and model fro  description
+                    manufacture, model = get_manufacture_model(description)
+                    page_info["Manufacturer"] = manufacture
+                    page_info["Model"] = model
+
+                # Extract Date of Next Inspection
+                next_inspection_pattern = re.compile(r'(\d{2}/\d{2}/\d{4})$', re.IGNORECASE)
+                next_inspection_match = next_inspection_pattern.search(row_text)
+                if next_inspection_match:
+                    page_info["Next Inspection Due Date"] = next_inspection_match.group(1).strip()
+                    #print("Next Inspection Date:", next_inspection_match)
+
+                row_data[id_number] = page_info
+
+    # Extract Date of Previous Inspection and Certificate Number
+    for page in page_tables:
+        for row in page:
+            row_text = ' '.join(cell if cell is not None else '' for cell in row)
+
+            # Extract Date of Previous Inspection
+            keyword_date = "Date of thorough examination"
+            if keyword_date.lower() in row_text.lower():
+                date_pattern = re.compile(r'\b(\d{2}/\d{2}/\d{4})\b')
+                previous_inspection_match = date_pattern.search(row_text)
+                if previous_inspection_match:
+                    date_of_thorough_examination = previous_inspection_match.group().strip()
+
+            # Extract Report No
+            keyword_report = "Report Ref No"
+            if keyword_report.lower() in row_text.lower():
+                report_pattern = re.compile(r'[A-Z]{3}/\d{6}/\d{5}')
+                report_ref_match = report_pattern.search(row_text)
+                if report_ref_match:
+                    report_ref_no = report_ref_match.group().strip()
+
+    # Assign Previous Inspection Date and Certificate No to all items in row_data
+    for id_number, page_info in row_data.items():
+        page_info["Previous Inspection"] = date_of_thorough_examination
+        page_info["Certificate No"] = report_ref_no
+        extraction_info[id_number] = page_info
+
+
+def process_table_type2(table, extraction_info):
     page_info = {}
     id_number = None
-    keyword_date = "Date of Thorough Examination"
+    report_number_pattern = re.compile(r'Report\s*Number:', re.IGNORECASE)
+
     for row_outer in table:
         #print("row_outer", row_outer)
         for cell in row_outer:
@@ -95,14 +191,14 @@ def process_table2(table, extraction_info):
                         description = parts[1].strip()
                         id_number = parts[2].strip()
                         #page_info["Id Number"] = id_number
+                        print("id_number", id_number)
                         page_info["Item Description"] = description
                         id_number_list = []
                         if "-" in id_number:
                             split_id_numbers = split_id_numbers_with_range([id_number])
-                            print("Split ID Numbers:", split_id_numbers)
                             id_number_list.extend(split_id_numbers)
                         else:
-                            id_number_list.extend(id_number)
+                            id_number_list.append(id_number)
                         for id_number in id_number_list:
                             extraction_info[id_number] = page_info
 
@@ -110,13 +206,24 @@ def process_table2(table, extraction_info):
                         manufacture, model = get_manufacture_model(description)
                         page_info["Manufacturer"] = manufacture
                         page_info["Model"] = model
+
                 elif "WLL" in cell:
                     parts = cell.split('\n')
-                    if len(parts) >= 2:
+                    if len(parts) >= 4:
                         wll = parts[3].strip()
-                        page_info["SWL"] = wll
-                elif "ReportNumber" in cell:
-                    certificate_number = cell.replace("ReportNumber:", "").strip()
+                        swl_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(TONNE|TONNES)\b', re.IGNORECASE)
+                        swl_match = swl_pattern.search(wll)
+                        if swl_match:
+                            swl_value = swl_match.group(1)
+                            swl_units = swl_match.group(2)
+                            swl_note = None
+                            page_info["SWL Value"] = swl_value
+                            page_info["SWL Unit"] = swl_units
+                            page_info["SWL Note"] = swl_note
+                            print("swl_value", swl_value)
+                            print("swl_units", swl_units)
+                elif report_number_pattern.search(cell):
+                    certificate_number = report_number_pattern.sub('', cell).strip()
                     page_info["Certificate No"] = certificate_number
                 elif "Date of Thorough" in cell:
                     previous_inspection = cell.replace("Date of Thorough Examination:", "").strip()
@@ -127,74 +234,7 @@ def process_table2(table, extraction_info):
                     page_info["Next Inspection Due Date"] = next_inspection
 
 
-def process_table1(table, extraction_info):
-    page_info = {}
-    id_number = None
-    id_pattern = re.compile(r'(\(\w+\)\s*)?[A-Z]{3}\d+')
-    swl_pattern = re.compile(r'(\d+\.\d+)\s+(?:Tonnes|Kilos)\s', re.IGNORECASE)
-
-    for row in table:
-        row_text = ' '.join(cell if cell is not None else '' for cell in row)
-
-        # Extract ID Number
-        id_match = id_pattern.search(row_text)
-        if id_match:
-            id_number = id_match.group()
-            #page_info["Id Number"] = id_number
-
-        # Extract SWL
-        swl_match = swl_pattern.search(row_text)
-        if swl_match:
-            page_info["SWL"] = swl_match.group().strip()
-           # print("SWL:", swl_match)
-
-        # Extract Description between ID Number and SWL
-        if id_match:
-            start_index = id_match.end()
-            if swl_match:
-                end_index = swl_match.start()
-            else:
-                end_index = -1
-            description = row_text[start_index:end_index].strip()
-            description = re.sub(r'\([^)]*\)\s*', '', description)
-            page_info["Item Description"] = description
-
-            #Get manufacture and model fro  description
-            manufacture, model = get_manufacture_model(description)
-            page_info["Manufacturer"] = manufacture
-            page_info["Model"] = model
-
-        # Extract Date of Next Inspection
-        next_inspection_pattern = re.compile(r'(\d{2}/\d{2}/\d{4})$', re.IGNORECASE)
-        next_inspection_match = next_inspection_pattern.search(row_text)
-        if next_inspection_match:
-            page_info["Next Inspection Due Date"] = next_inspection_match.group(1).strip()
-            #print("Next Inspection Date:", next_inspection_match)
-
-        # Extract Date of previous Inspection
-        keyword_date = "Date of thorough examination"
-        if keyword_date.lower() in row_text.lower():
-            #print("Keyword found in row text:", row_text)
-            date_pattern = re.compile(r'\b(\d{2}/\d{2}/\d{4})\b')
-            previous_inspection_match = date_pattern.search(row_text)
-            if previous_inspection_match:
-                page_info["Previous Inspection"] = previous_inspection_match.group().strip()
-                #print("Previous Inspection Date:", previous_inspection_match)
-
-
-        #Extract Report No
-        keyword_report = "Report Ref No"
-        if keyword_report.lower() in row_text.lower():
-            report_pattern = re.compile(r'[A-Z]{3}/\d{6}/\d{5}')
-            report_ref_match = report_pattern.search(row_text)
-            if report_ref_match:
-                page_info["Certificate No"] = report_ref_match.group().strip()
-                #print("Certificate Number", certificate_number)
-
-        if id_number:
-            extraction_info[id_number] = page_info
-
-def process_table3(table,extraction_info):
+def process_table_type3(table, extraction_info):
     page_info = dict()
     id_number = None
     for i, row in enumerate(table):
@@ -211,10 +251,9 @@ def process_table3(table,extraction_info):
                             id_number_list = []
                             if "-" in id_number:
                                 split_id_numbers = split_id_numbers_with_range([id_number])
-                                print("Split ID Numbers:", split_id_numbers)
                                 id_number_list.extend(split_id_numbers)
                             else:
-                                id_number_list.extend(id_number)
+                                id_number_list.append(id_number)
                             for id_number in id_number_list:
                                 extraction_info[id_number] = page_info
                     # Check for Description label
@@ -233,15 +272,25 @@ def process_table3(table,extraction_info):
                         wll_row = table[i + 1] if i + 1 < len(table) else None
                         if wll_row:
                             wll = wll_row[j].strip() if j < len(wll_row) else None
-                            page_info["SWL"] = wll
+                            swl_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(TONNE|TONNES)\b', re.IGNORECASE)
+                            swl_match = swl_pattern.search(wll)
+                            if swl_match:
+                                swl_value = swl_match.group(1)
+                                swl_units = swl_match.group(2)
+                                page_info["SWL Value"] = swl_value
+                                page_info["SWL Unit"] = swl_units
                     elif "Certificate Number" in cell:
                         certificate_row = table[i + 1] if i + 1 < len(table) else None
                         if certificate_row:
                             certificate_number = certificate_row[j].strip() if j < len(
                                 certificate_row) else None
                             page_info["Certificate No"] = certificate_number
+                    elif "Date of Declaration" in cell:
+                        parts = cell.split('\n')
+                        if len(parts) >= 3:
+                            date_of_declaration = parts[3].strip()
+                            page_info["Previous Inspection"] = date_of_declaration
 
 
 if __name__ == "__main__":
-    extract_first_integrated_pdf("../resources/First_Integrated.pdf")
-    # get_identification_number_list("A1 to A6", 8)
+    extract_first_integrated_pdf("../resources/First Integrated Full Cert Pack.pdf")
