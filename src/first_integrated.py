@@ -1,11 +1,13 @@
 import re
 import pdfplumber
+from datetime import datetime, timedelta
 from openpyxl import load_workbook
 import excel_management
 
 
 def split_id_numbers_with_range(id_numbers):
     new_id_numbers = []
+    error_statements = []
     for id_number in id_numbers:
 
         match = re.match(r'([A-Za-z]+)(\d+)-(\d+)', id_number)
@@ -13,6 +15,12 @@ def split_id_numbers_with_range(id_numbers):
             prefix_alpha = match.group(1)
             range_start = int(match.group(2))
             range_end = int(match.group(3))
+            if range_end < range_start:
+                error_statement = f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}"
+                error_statements.append(error_statement)
+                continue
+            for i in range(range_start, range_end + 1):
+                new_id_numbers.append(f"{prefix_alpha}{i}")
 
         else:
             # Check if the second pattern matches
@@ -22,15 +30,17 @@ def split_id_numbers_with_range(id_numbers):
                 prefix_numeric = match.group(2)
                 range_start = int(prefix_numeric)
                 range_end = int(match.group(3))
+                if range_end < range_start:
+                    error_statement = f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}"
+                    error_statements.append(error_statement)
+                    continue
+                # Generate new id numbers based on the matched pattern
+                for i in range(range_start, range_end + 1):
+                    new_id_numbers.append(f"{prefix_alpha}/{i}")
             else:
                 # If neither pattern matches, append the id_number as is
                 new_id_numbers.append(id_number)
                 continue
-
-        # Generate new id numbers based on the matched pattern
-        for i in range(range_start, range_end + 1):
-            new_id_numbers.append(f"{prefix_alpha}{i}")
-
     return new_id_numbers
 
 
@@ -60,6 +70,16 @@ def contains_keyword(first_row, keyword):
             return True
     return False
 
+
+def add_six_months(date_str):
+
+    date_declaration_obj = datetime.strptime(date_str, '%d/%m/%Y')
+    # Add 6 months to the date of declaration
+    next_inspection_date_obj = date_declaration_obj + timedelta(days=6*30)
+    # Convert the next inspection date back to a string in the same format
+    next_inspection_date_str = next_inspection_date_obj.strftime('%d/%m/%Y')
+
+    return next_inspection_date_str
 
 # Call to the First Integrated PDF
 def extract_first_integrated_pdf(pdf_path):
@@ -287,8 +307,10 @@ def process_table_type3(table, extraction_info):
                         parts = cell.split('\n')
                         if len(parts) >= 3:
                             date_of_declaration = parts[3].strip()
+                            # Use the function to add 6 months to the date
+                            next_inspection_date = add_six_months(date_of_declaration)
                             page_info["Previous Inspection"] = date_of_declaration
-
+                            page_info["Next Inspection Due Date"] = next_inspection_date
 
 if __name__ == "__main__":
     extract_first_integrated_pdf("../resources/First Integrated Full Cert Pack.pdf")
