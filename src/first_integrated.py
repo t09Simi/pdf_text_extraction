@@ -35,21 +35,21 @@ def split_id_numbers_with_range(id_numbers):
 
 
 def get_manufacture_model(description: str):
-    workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
-    manufacturer_sheet = workbook['Manufacture']
-    model_sheet = workbook['Model']
-    description_keywords = description.lower().split()
+    workbook = load_workbook("../database/Model Numbers with their Manufacturers.xlsx")
+    sheet = workbook['Sheet1']
+
+    description_keywords = description.lower()
     manufacture, model = "",""
-    for row in manufacturer_sheet.iter_rows(min_row=2, values_only=True):
-        keyword = row[0]
-        if keyword and str(keyword).lower() in description_keywords:
-            manufacture = keyword
+
+    # Search for manufacturer in Manufacturer column
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        model_keyword = row[1].strip()
+
+        if model_keyword and str(model_keyword).lower() in description_keywords:
+            model = model_keyword
+            manufacture = row[0]
             break
-    for row in model_sheet.iter_rows(min_row=2, values_only=True):
-        keyword = row[0]
-        if keyword and str(keyword).lower() in description_keywords:
-            model = keyword
-            break
+
     return manufacture, model
 
 
@@ -191,7 +191,6 @@ def process_table_type2(table, extraction_info):
                         description = parts[1].strip()
                         id_number = parts[2].strip()
                         #page_info["Id Number"] = id_number
-                        print("id_number", id_number)
                         page_info["Item Description"] = description
                         id_number_list = []
                         if "-" in id_number:
@@ -220,8 +219,7 @@ def process_table_type2(table, extraction_info):
                             page_info["SWL Value"] = swl_value
                             page_info["SWL Unit"] = swl_units
                             page_info["SWL Note"] = swl_note
-                            print("swl_value", swl_value)
-                            print("swl_units", swl_units)
+
                 elif report_number_pattern.search(cell):
                     certificate_number = report_number_pattern.sub('', cell).strip()
                     page_info["Certificate No"] = certificate_number
