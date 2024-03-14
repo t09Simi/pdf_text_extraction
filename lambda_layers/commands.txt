@@ -1,0 +1,2 @@
+pip3 install --platform manylinux2014_x86_64 --only-binary=:all: -t {destionation folder to download libraries} -r {requirements file location}
+#Example: pip3 install --platform manylinux2014_x86_64 --only-binary=:all: -t ./python/lib/python3.12/site-packages -r openpyxl.txt
