@@ -1,7 +1,6 @@
 import re
 import pdfplumber
 from openpyxl import load_workbook
-
 import excel_management
 
 
@@ -10,18 +9,47 @@ def get_manufacture_model(description: str):
     manufacturer_sheet = workbook['Manufacture']
     model_sheet = workbook['Model']
     description_keywords = description.lower().split()
-    manufacture, model = "",""
+    manufacture, model = "", ""
     for row in manufacturer_sheet.iter_rows(min_row=2, values_only=True):
         keyword = row[0]
+        value = row[1]
         if keyword and str(keyword).lower() in description_keywords:
-            manufacture = keyword
+            manufacture = value
             break
+    if str(manufacture).lower() == "miller" and "weblift" in description_keywords:
+        manufacture = "Miller Weblift"
     for row in model_sheet.iter_rows(min_row=2, values_only=True):
         keyword = row[0]
         if keyword and str(keyword).lower() in description_keywords:
             model = keyword
             break
     return manufacture, model
+
+
+def process_swl(swl: str):
+    pattern = r'^(\d+(?:\.\d+)?)([a-zA-Z]+)?\s*(.*)$'
+
+    # Match the pattern
+    match = re.match(pattern, swl)
+
+    if match:
+        value_part = match.group(1)
+        unit_part = match.group(2)
+        note_part = match.group(3)
+    else:
+        value_part = None
+        unit_part = None
+        note_part = swl
+
+    # Check if part 2 is a unit type or not
+    units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
+             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
+    if unit_part and unit_part not in units:
+        note_part = unit_part + " " + note_part if note_part else unit_part
+        unit_part = None
+
+    return value_part, unit_part, note_part
 
 
 def get_identification_parts_list(input_string: str, quantity: int):
@@ -77,67 +105,146 @@ def get_identification_number_list(identification_numbers: str, quantity: int):
 
 
 def extract_sparrow_pdf(pdf_path):
-    print("<------------extracting sparrow pdf------------>")
-    pdf_doc = pdfplumber.open(pdf_path)
-    extraction_info = dict()
-    for i in range(0, len(pdf_doc.pages)):
-        page = pdf_doc.pages[i]
-        if page.extract_tables():
-            print("page number:", i)
-            page_tables = page.extract_tables()[0]
-            table_data1 = page_tables[0][0].split('\n')
-            table_data3 = page_tables[3]
-            table_data4 = page_tables[4]
-            identification_numbers, description, swl, quantity = None, None, None, None
+    try:
+        print("<------------extracting sparrow pdf------------>")
+        pdf_doc = pdfplumber.open(pdf_path)
+        extraction_info = dict()
+        page_errors = dict()
+        for i in range(0, len(pdf_doc.pages)):
+            try:
+                page = pdf_doc.pages[i]
+                table_extract = page.extract_tables()
+                if table_extract:
+                    print("page number:", i)
+                    page_tables = table_extract[0]
+                    table_data1 = page_tables[0][0].split('\n')
+                    table_data3 = page_tables[3]
+                    table_data4 = page_tables[4]
+                    identification_numbers = description = swl = quantity = None
+                    errors = list()
+                    for index in range(0, len(table_data3)):
+                        try:
+                            if table_data3[index] is None:
+                                continue
+                            text_to_compare = table_data3[index].lower()
+                            if not identification_numbers and "identification" in text_to_compare:
+                                identification_numbers = table_data4[index].strip()
+                            elif not description and "description" in text_to_compare:
+                                description = table_data4[index].replace('\n', ' ')
+                            elif not swl and "swl" in text_to_compare:
+                                swl = table_data4[index].strip()
+                            elif not quantity and "quantity" in text_to_compare:
+                                quantity = int(float(table_data4[index]))
+                        except Exception as e:
+                            print("Error extracting value from page:", e)
 
-            for index in range(0, len(table_data3)):
-                if table_data3[index] is None:
-                    continue
-                text_to_compare = table_data3[index].lower()
-                if not identification_numbers and  "identification" in text_to_compare:
-                    identification_numbers = table_data4[index].strip()
-                elif not description and "description" in text_to_compare:
-                    description = table_data4[index].replace('\n', ' ')
-                elif not swl and "swl" in text_to_compare:
-                    swl = table_data4[index].strip()
-                elif not quantity and "quantity" in text_to_compare:
-                    quantity = int(float(table_data4[index]))
-            if identification_numbers:
-                page_info = dict()
-                # page_info["Id Number"] = table_data4[0].strip()
-                if description:
-                    page_info["Item Description"] = description.split(':')[0]
-                    manufacturer, model = get_manufacture_model(description)
-                    page_info["Manufacturer"] = manufacturer
-                    page_info["Model"] = model
-                page_info["SWL"] = swl
-                # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
+                    if identification_numbers:
+                        page_info = dict()
+                        # page_info["Id Number"] = table_data4[0].strip()
+                        if description:
+                            try:
+                                item_description = description
+                                if not item_description:
+                                    errors.append("Item Description not found")
+                                else:
+                                    page_info["Item Description"] = item_description
+                            except Exception as e:
+                                errors.append(e)
+                            try:
+                                manufacturer, model = get_manufacture_model(description)
+                                if not manufacturer:
+                                    errors.append("Manufacturer not found")
+                                else:
+                                    page_info["Manufacturer"] = manufacturer
+                                if not model:
+                                    errors.append("Model not found")
+                                else:
+                                    page_info["Model"] = model
+                            except Exception as e:
+                                errors.append(e)
+                        else:
+                            errors.append(
+                                "Description not found in the page. Item Description, Manufacturer, Model columns are left empty")
+                        # page_info["SWL"] = swl
+                        if swl:
+                            try:
+                                swl_value, swl_unit, swl_note = process_swl(swl)
+                                if not swl_value:
+                                    errors.append("SWL Value not found")
+                                else:
+                                    page_info[
+                                        "SWL Value"] = swl_value
+                                if not swl_unit:
+                                    errors.append("SWL Unit not found")
+                                else:
+                                    page_info["SWL Unit"] = swl_unit
+                                page_info["SWL Note"] = swl_note
+                            except Exception as e:
+                                errors.append(e)
+                        else:
+                            errors.append(
+                                "SWL not found in the page. SWL Value, SWL Unit, SWL Note columns are left empty")
+                        # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
 
-                table_data1_mapping = dict()
-                for data in table_data1:
-                    data_list = data.split(':')
-                    key = data_list[0].lower().replace(" ", "").strip()
-                    value = data_list[-1].strip()
-                    table_data1_mapping[key] = value
-                page_info["Certificate No"] = table_data1_mapping["reportnumber"]
-                page_info["Previous Inspection"] = table_data1_mapping["dateofthoroughexamination"]
-                page_info["Provider Identification"] = "LOFT-" + table_data1_mapping["jobnumber"]
-                page_info["Next Inspection Due Date"] = table_data1_mapping["duedateofnextthoroughexamination"]
+                        table_data1_mapping = dict()
+                        for data in table_data1:
+                            try:
+                                data_list = data.split(':')
+                                key = data_list[0].lower().replace(" ", "").strip()
+                                value = data_list[-1].strip()
+                                table_data1_mapping[key] = value
+                            except Exception as e:
+                                print("Error extracting value from page:", e)
 
-                if quantity > 1:
-                    identification_number_list = get_identification_number_list(identification_numbers, quantity)
+                        if "reportnumber" not in table_data1_mapping:
+                            errors.append("Certificate no not found")
+                        else:
+                            page_info["Certificate No"] = table_data1_mapping["reportnumber"]
+                        if "dateofthoroughexamination" not in table_data1_mapping:
+                            errors.append("Previous Inspection not found")
+                        else:
+                            page_info["Previous Inspection"] = table_data1_mapping["dateofthoroughexamination"]
+                        if "jobnumber" not in table_data1_mapping:
+                            errors.append("Provider Identification not found")
+                        else:
+                            page_info["Provider Identification"] = "LOFT-" + table_data1_mapping["jobnumber"]
+                        if "duedateofnextthoroughexamination" not in table_data1_mapping:
+                            errors.append("Next Inspection Due Date not found")
+                        else:
+                            page_info["Next Inspection Due Date"] = table_data1_mapping["duedateofnextthoroughexamination"]
+
+                        try:
+                            if quantity > 1:
+                                identification_number_list = get_identification_number_list(identification_numbers,
+                                                                                            quantity)
+                            else:
+                                identification_number_list = list()
+                                identification_number_list.append(identification_numbers)
+                            if errors:
+                                page_info["Errors"] = str(errors)
+                                # print(identification_numbers, errors)
+                            for identification_number in identification_number_list:
+                                extraction_info[identification_number] = page_info
+                        except Exception as e:
+                            errors.append(
+                                "Error in extracting identification numbers. So, appending the identification number as found in the page")
+                            page_info["Errors"] = str(errors)
+                            extraction_info.clear()
+                            extraction_info[identification_numbers] = page_info
+                        # print(identification_numbers, page_info)
+                    else:
+                        page_errors[i] = "No identification numbers are found in the page. So, the page is not processed."
+                        print("No identification number found")
                 else:
-                    identification_number_list = list()
-                    identification_number_list.append(identification_numbers)
+                    page_errors[i] = "No text found on page. probably it's an image. So, the page is not processed."
+            except Exception as e:
+                page_errors[i] = "Error", e, " occurred while processing the page:"
+                print("Error", e, " occurred while processing the page:", i)
 
-                for identification_number in identification_number_list:
-                    extraction_info[identification_number] = page_info
-
-                # print(identification_numbers, page_info)
-            else:
-                print("No identification error")
-    print(len(extraction_info.keys()))
-    excel_management.update_excel(extraction_info, "Sparrows")
+        print(len(extraction_info.keys()), page_errors.keys())
+        excel_management.create_excel(extraction_info, "../database/Sparrows.xlsx", "Sparrows", page_errors)
+    except Exception as e:
+        print("An error occurred:", e)
 
 
 if __name__ == "__main__":
