@@ -84,6 +84,32 @@ def extract_quantity(text):
         return None
 
 
+def process_swl(swl: str):
+    pattern = r'^(\d+(?:\.\d+)?)([a-zA-Z]+)?\s*(.*)$'
+
+    # Match the pattern
+    match = re.match(pattern, swl)
+
+    if match:
+        value_part = match.group(1)
+        unit_part = match.group(2)
+        note_part = match.group(3)
+    else:
+        value_part = None
+        unit_part = None
+        note_part = swl
+
+    # Check if part 2 is a unit type or not
+    units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
+             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
+    if unit_part and unit_part not in units:
+        note_part = unit_part + " " + note_part if note_part else unit_part
+        unit_part = None
+
+    return value_part, unit_part, note_part
+
+
 def extraction_centurion_pdf(pdf_path):
     print("<------------extracting centurion pdf------------>")
     pdf = pdfplumber.open(pdf_path)
@@ -107,6 +133,7 @@ def extraction_centurion_pdf(pdf_path):
                 table_data4 = first_table[4]
                 # data5 ID number Value
                 table_data5 = first_table[5]
+                errors = list()
                 identification_number_list = list()
                 if "Quantity & Description of Equipment, Serial Numbers" in table_data3[0]:
 
@@ -136,7 +163,22 @@ def extraction_centurion_pdf(pdf_path):
                             manufacturer, model = get_manufacture(description)
                             page_info["Manufacturer"] = manufacturer
                             page_info["Model"] = model
-                        page_info["SWL"] = wwl
+                        if wwl:
+                            try:
+                                swl_value, swl_unit, swl_note = process_swl(wwl)
+                                if not swl_value:
+                                    errors.append("SWL Value not found")
+                                else:
+                                    page_info["SWL Value"] =swl_value
+                                if not swl_unit:
+                                    errors.append("SWL Unit not Found")
+                                else:
+                                    page_info["SWL Unit"] = swl_unit
+                                page_info["SWL Note"] = swl_note
+                            except Exception as e:
+                                errors.append(e)
+                        else:
+                            errors.append("SWL not found in this page.")
                         page_info["Next Inspection Due Date"] = next_thorough
                         # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
                         table_data1_mapping = dict()
