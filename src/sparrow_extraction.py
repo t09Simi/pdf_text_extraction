@@ -221,6 +221,7 @@ def extract_sparrow_pdf(pdf_path):
                                 identification_number_list = list()
                                 identification_number_list.append(identification_numbers)
                             if errors:
+                                errors.append("page no: "+str(i))
                                 page_info["Errors"] = str(errors)
                                 # print(identification_numbers, errors)
                             for identification_number in identification_number_list:
@@ -228,6 +229,7 @@ def extract_sparrow_pdf(pdf_path):
                         except Exception as e:
                             errors.append(
                                 "Error in extracting identification numbers. So, appending the identification number as found in the page")
+                            errors.append("page no: " +str(i))
                             page_info["Errors"] = str(errors)
                             extraction_info.clear()
                             extraction_info[identification_numbers] = page_info
@@ -238,8 +240,8 @@ def extract_sparrow_pdf(pdf_path):
                 else:
                     page_errors[i] = "No text found on page. probably it's an image. So, the page is not processed."
             except Exception as e:
-                page_errors[i] = "Error", e, " occurred while processing the page:"
-                print("Error", e, " occurred while processing the page:", i)
+                page_errors[i] = "Error" + str(e) + " occurred while processing the page:"
+                print("Error", {e}, " occurred while processing the page:", i)
 
         print(len(extraction_info.keys()), page_errors.keys())
         excel_management.create_excel(extraction_info, "../database/Sparrows.xlsx", "Sparrows", page_errors)
