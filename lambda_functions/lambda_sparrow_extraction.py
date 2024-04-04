@@ -92,8 +92,11 @@ def get_manufacture_model(description: str):
         manufacture = "Miller Weblift"
     for row in model_sheet.iter_rows(min_row=2, values_only=True):
         keyword = row[0]
+        value = row[1]
         if keyword and str(keyword).lower() in description_keywords:
             model = keyword
+            if not manufacture and value:
+                manufacture = value
             break
     # print("manufacture: ", manufacture,"model: ", model)
     return manufacture, model
@@ -113,7 +116,9 @@ def process_swl(swl: str):
         value_part = None
         unit_part = None
         note_part = swl
-
+    units_map = {"kgs": "kg"}
+    if unit_part in units_map:
+        unit_part = units_map[unit_part]
     # Check if part 2 is a unit type or not
     units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
              "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
@@ -297,7 +302,7 @@ def extract_sparrow_pdf(source_bucket, object_key):
                                 identification_number_list = list()
                                 identification_number_list.append(identification_numbers)
                             if errors:
-                                errors.append("page no: "+str(i))
+                                errors.append("page no: "+str(i+1))
                                 page_info["Errors"] = str(errors)
                                 # print(identification_numbers, errors)
                             for identification_number in identification_number_list:
@@ -305,7 +310,7 @@ def extract_sparrow_pdf(source_bucket, object_key):
                         except Exception as e:
                             errors.append(
                                 "Error in extracting identification numbers. So, appending the identification number as found in the page")
-                            errors.append("page no: " + str(i))
+                            errors.append("page no: " + str(i+1))
                             page_info["Errors"] = str(errors)
                             extraction_info.clear()
                             extraction_info[identification_numbers] = page_info

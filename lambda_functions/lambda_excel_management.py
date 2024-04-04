@@ -2,6 +2,7 @@ import json
 import boto3
 from io import BytesIO
 import openpyxl
+from datetime import datetime
 from openpyxl.styles import Font, Alignment, Border, Side
 
 s3 = boto3.client('s3')
@@ -25,10 +26,18 @@ def send_sns(message, subject):
 def save_workbook_to_s3(workbook, bucket, key):
     # Save the modified workbook to bytes
     print("<--------------saving excel on the bucket------------------>")
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    target_key = f'{current_date}/{key}'
+     # Check if the folder exists
+    existing_objects = s3.list_objects(Bucket=bucket, Prefix=f'{current_date}/')
+
+    if 'Contents' not in existing_objects:
+        # Folder doesn't exist, create it
+        s3.put_object(Body='', Bucket=bucket, Key=f'{current_date}/')
     buffer = BytesIO()
     workbook.save(buffer)
     # Upload the modified Excel file back to S3, overwriting the original file
-    s3.put_object(Body=buffer.getvalue(), Bucket=bucket, Key=key)
+    s3.put_object(Body=buffer.getvalue(), Bucket=bucket, Key=target_key)
 
 
 def create_excel(extracted_data: dict, filename: str, client: str, page_errors: dict, column_mapping: dict):
@@ -71,7 +80,7 @@ def create_excel(extracted_data: dict, filename: str, client: str, page_errors: 
     for key, value in page_errors.items():
         sheet_errors.append([key, value])  # Write key-value pairs as rows
 
-    save_workbook_to_s3(workbook, 'resources-and-extraction-data', filename)
+    save_workbook_to_s3(workbook, 'excel-extraction-data', filename)
     # Close the workbook
     workbook.close()
     print("<-------------- Excel created successfully ------------------>")

@@ -1,0 +1,35 @@
+["kg", "kgs", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
+             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
+
+
+Hello Ross,
+
+Thanks a lot for the quick feedback. Please find my comments for the above feedback.
+
+1.The output file would be better if it was in the “success” folder with the date on it if that was possible so that it’s easy to find.
+A. Please can you clarify you want to use the success folder in pdf-out bucket and output the excel file there , or you want us to make the folder structure of resources-and-extraction-data bucket same as pdf-out bucket . E.g. folder structure will be resources-and-extraction-data/success/current-date/excel-file.
+
+2.Is it possible so that if you find the model number then this gets removed from the description section?
+A. Standard description feature is not included in this release. We will provide this feature in the next release.
+
+3.If you go to the highlighted section on the attached file, you can see the kgs is in the wrong column. This should also be converted to kg if possible.
+A. This is done. For future use please check the attached file(swl_units) that contains all the possible unit's type. Write now this is hard coded in the program. Please let us know if we need append anymore values.
+
+4.I think your list of manufacturers may not be up to date as there was a few examples where if you found one thing it should out put something else. For example, “green pin” should be “Van Beest”.
+A. This is done.
+
+5. I think I also gave you a list of model numbers with their manufacturer beside them which could have been uses here. For example if you found “G4163” in the model number you would know that the manufacturer is equal to “Van Beest”
+A. According to our understanding you have provided that file for First Intergrated purpose. Thats the reason it wasn't used in first place. Yes, I will use this information in sparrow as well now. Also, can you please let us know is that the full list of model number with their manufacture. If not, please can you provide this to us.
+
+Please, let us know if you need anything else.
+
+Regards,
+Sairaj Naik.
+Portfolio
+
+
+
+
+
+
