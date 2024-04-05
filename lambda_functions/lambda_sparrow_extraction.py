@@ -195,7 +195,7 @@ def extract_sparrow_pdf(source_bucket, object_key):
                 page = pdf_doc.pages[i]
                 table_extract = page.extract_tables()
                 if table_extract:
-                    print("page number:", i)
+                    print("page number:", i+1)
                     page_tables = table_extract[0]
                     table_data1 = page_tables[0][0].split('\n')
                     table_data3 = page_tables[3]
@@ -263,7 +263,7 @@ def extract_sparrow_pdf(source_bucket, object_key):
                                 errors.append(e)
                         else:
                             errors.append(
-                                "SWL not found in the page. SWL Value, SWL Unit, SWL Note columns are left empty")
+                                "SWL not found in the page.")
                         # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
 
                         table_data1_mapping = dict()
@@ -311,18 +311,18 @@ def extract_sparrow_pdf(source_bucket, object_key):
                             errors.append(
                                 "Error in extracting identification numbers. So, appending the identification number as found in the page")
                             errors.append("page no: " + str(i+1))
+                            print("Error in extracting identification numbers. So, appending the identification number as found in the page")
                             page_info["Errors"] = str(errors)
-                            extraction_info.clear()
                             extraction_info[identification_numbers] = page_info
                         # print(identification_numbers, page_info)
                     else:
                         page_errors[
-                            i] = "No identification numbers are found in the page. So, the page is not processed."
+                            i+1] = "No identification numbers are found in the page. So, the page is not processed."
                         print("No identification number found")
                 else:
-                    page_errors[i] = "No text found on page. probably it's an image. So, the page is not processed."
+                    page_errors[i+1] = "No text found on page. probably it's an image. So, the page is not processed."
             except Exception as e:
-                page_errors[i] = "Error" + str(e) + " occurred while processing the page:"
+                page_errors[i+1] = "Error" + str(e) + " occurred while processing the page:"
                 print("Error", e, " occurred while processing the page:", i)
 
         # print(len(extraction_info.keys()), page_errors.keys())
