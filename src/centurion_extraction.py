@@ -5,23 +5,57 @@ from datetime import datetime
 
 import excel_management
 
-def get_manufacture(description: str):
+def get_manufacture_model(description: str):
     workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
     manufacturer_sheet = workbook['Manufacture']
-    model_sheet =workbook['Model']
-    description_keyword =description.lower().split()
-    manufacture, model = "",""
+    model_sheet = workbook['Model']
+    description_keywords = description.lower().split()
+    manufacture, model = "", ""
     for row in manufacturer_sheet.iter_rows(min_row=2, values_only=True):
         keyword = row[0]
-        if keyword and str(keyword).lower() in description_keyword:
-            manufacture = keyword
+        value = row[1]
+        if keyword and str(keyword).lower() in description_keywords:
+            manufacture = value
             break
+    # if str(manufacture).lower() == "miller" and "weblift" in description_keywords:
+    #     manufacture = "Miller Weblift"
     for row in model_sheet.iter_rows(min_row=2, values_only=True):
         keyword = row[0]
-        if keyword and str(keyword).lower() in description_keyword:
+        value = row[1]
+        if keyword and str(keyword).lower() in description_keywords:
             model = keyword
+            if not manufacture and value:
+                manufacture = value
             break
     return manufacture, model
+
+
+def process_swl(swl: str):
+    pattern = r'^(\d+(?:\.\d+)?)([a-zA-Z]+)?\s*(.*)$'
+
+    # Match the pattern
+    match = re.match(pattern, swl)
+
+    if match:
+        value_part = match.group(1)
+        unit_part = match.group(2)
+        note_part = match.group(3)
+    else:
+        value_part = None
+        unit_part = None
+        note_part = swl
+    units_map = {"kgs": "kg"}
+    if unit_part in units_map:
+        unit_part = units_map[unit_part]
+    # Check if part 2 is a unit type or not
+    units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
+             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
+    if unit_part and unit_part not in units:
+        note_part = unit_part + " " + note_part if note_part else unit_part
+        unit_part = None
+
+    return value_part, unit_part, note_part
 
 
 def get_identification_parts_list(input_string: str, quantity: int):
@@ -84,41 +118,15 @@ def extract_quantity(text):
         return None
 
 
-def process_swl(swl: str):
-    pattern = r'^(\d+(?:\.\d+)?)([a-zA-Z]+)?\s*(.*)$'
-
-    # Match the pattern
-    match = re.match(pattern, swl)
-
-    if match:
-        value_part = match.group(1)
-        unit_part = match.group(2)
-        note_part = match.group(3)
-    else:
-        value_part = None
-        unit_part = None
-        note_part = swl
-
-    # Check if part 2 is a unit type or not
-    units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
-             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
-             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
-    if unit_part and unit_part not in units:
-        note_part = unit_part + " " + note_part if note_part else unit_part
-        unit_part = None
-
-    return value_part, unit_part, note_part
-
-
 def extraction_centurion_pdf(pdf_path):
     print("<------------extracting centurion pdf------------>")
     pdf = pdfplumber.open(pdf_path)
     extraction_info = dict()
+    page_errors = dict()
     for i, page in enumerate(pdf.pages):
         text = page.extract_text()
         page = pdf.pages[i]
         if "Centurion" in text and "Hendrik" not in text:
-
             if page.extract_tables():
                 print("page number:", i)
                 page_tables = page.extract_tables()
@@ -137,32 +145,55 @@ def extraction_centurion_pdf(pdf_path):
                 identification_number_list = list()
                 if "Quantity & Description of Equipment, Serial Numbers" in table_data3[0]:
 
-                    id_numbers, description, wwl, next_thorough = None, None, None, None
+                    id_numbers, description, mnfer, wwl, next_thorough = None, None, None, None, None
                     quantity = 1
 
                     for index in range(0, len(table_data3)):
-                        if table_data3[index] is None:
-                            continue
-                        text_to_compare = table_data3[index].lower()
-                        if not description and "description" in text_to_compare:
-                            description = table_data4[0].replace('\n', ' ')
-                            serial_numbers = table_data5[index].split(":")[-1].strip()
-                        elif not wwl and "working" in text_to_compare:
-                            wwl = table_data4[index].strip()
-                        elif not next_thorough and "next" in text_to_compare:
-                            date_string = table_data4[index].strip()
-                            date_obj = datetime.strptime(date_string, "%d/%m/%Y")
-                            next_thorough = date_obj.strftime("%d/%m/%Y")
-                        elif not id_numbers and "certificate" in text_to_compare:
-                            id_numbers = table_data4[index].strip()
+                        try:
+                            if table_data3[index] is None:
+                                continue
+                            text_to_compare = table_data3[index].lower()
+                            if not description and "description" in text_to_compare:
+                                description = table_data4[0].replace('\n', ' ')
+                                serial_numbers = table_data5[index].split(":")[-1].strip()
+                                mnfer = table_data4[4].strip()
+
+                            elif not wwl and "working" in text_to_compare:
+                                wwl = table_data4[index].strip()
+                            elif not next_thorough and "next" in text_to_compare:
+                                date_string = table_data4[index].strip()
+                                date_obj = datetime.strptime(date_string, "%d/%m/%Y")
+                                next_thorough = date_obj.strftime("%d/%m/%Y")
+                            elif not id_numbers and "certificate" in text_to_compare:
+                                id_numbers = table_data4[index].strip()
+                        except Exception as e:
+                            print("Error extracting value from page:", e)
 
                     if id_numbers:
                         page_info = dict()
                         if description:
-                            page_info["Item Description"] = description.split(':')[0]
-                            manufacturer, model = get_manufacture(description)
-                            page_info["Manufacturer"] = manufacturer
-                            page_info["Model"] = model
+                            try:
+                                item_description = description
+                                if not item_description:
+                                    errors.append("Item Description not found")
+                                else:
+                                    page_info["Item Description"] = description.split(':')[0]
+                            except Exception as e:
+                                errors.append(e)
+                            try:
+                                manufacturer, model = get_manufacture_model(description)
+                                manufacturer = mnfer
+                                if not manufacturer:
+                                    errors.append("Manufacturer not found")
+                                else:
+                                    page_info["Manufacturer"] = manufacturer
+                                if not model:
+                                    errors.append("Model not found")
+                                else:
+                                    page_info["Model"] = model
+                            except Exception as e:
+                                errors.append(e)
+
                         if wwl:
                             try:
                                 swl_value, swl_unit, swl_note = process_swl(wwl)
@@ -207,7 +238,7 @@ def extraction_centurion_pdf(pdf_path):
                         print("No identification error")
 
                 elif "Qty, Description of Equipment, Serial Numbers" in table_data3[0]:
-                    quantity, id_numbers, description, wwl, next_thorough = None, None, None, None, None
+                    quantity, id_numbers, description, mnfer, wwl, next_thorough = None, None, None, None, None, None
                     for index in range(0, len(table_data3)):
                         if table_data3[index] is None:
                             continue
@@ -216,6 +247,7 @@ def extraction_centurion_pdf(pdf_path):
                             description = table_data4[index].replace('\n', ' ')
                             serial_numbers = table_data5[index].split(":")[-1].strip()
                             quantity = extract_quantity(table_data4[index])
+                            mnfer = table_data4[4].strip()
                         elif not wwl and "working" in text_to_compare:
                             wwl = table_data4[index].strip()
                         elif not next_thorough and "next" in text_to_compare:
@@ -229,10 +261,26 @@ def extraction_centurion_pdf(pdf_path):
                         page_info = dict()
                         if description:
                             page_info["Item Description"] = description.split(':')[0]
-                            manufacturer, model = get_manufacture(description)
+                            manufacturer, model = get_manufacture_model(description)
+                            manufacturer = mnfer
                             page_info["Manufacturer"] = manufacturer
                             page_info["Model"] = model
-                        page_info["SWL"] = wwl
+                        if wwl:
+                            try:
+                                swl_value, swl_unit, swl_note = process_swl(wwl)
+                                if not swl_value:
+                                    errors.append("SWL Value not found")
+                                else:
+                                    page_info["SWL Value"] = swl_value
+                                if not swl_unit:
+                                    errors.append("SWL Unit not Found")
+                                else:
+                                    page_info["SWL Unit"] = swl_unit
+                                page_info["SWL Note"] = swl_note
+                            except Exception as e:
+                                errors.append(e)
+                        else:
+                            errors.append("SWL not found in this page.")
                         page_info["Next Inspection Due Date"] = next_thorough
                         # report_number, date_of_examination, job_number, next_date_of__examination = None, None, None, None
                         table_data1_mapping = dict()
@@ -260,6 +308,7 @@ def extraction_centurion_pdf(pdf_path):
                         # print(identification_numbers, page_info)
                     else:
                         print("No identification error")
+
 
         elif "Hendrik" in text:
             page = pdf.pages[i]
@@ -312,19 +361,41 @@ def extraction_centurion_pdf(pdf_path):
                 text_to_compare = table_data2[index].lower()
                 if not description and 'description' in text_to_compare:
                     description = table_data4[index].replace('\n', ' ')
-                    manufacturer_data = table_data4[1]
-                    manufacturer_match = re.match(r"(\w+\s+\w+)", manufacturer_data)
-                    if manufacturer_match:
-                        manufacturer = manufacturer_match.group(0)
-
+                    manufacturer_data = table_data4[2]
 
             if id_numbers:
                 page_info = dict()
                 if description:
                     page_info["Item Description"] = description.split(':')[0]
-                    page_info["Manufacturer"] = manufacturer
-                    page_info["Model"] = model
-                    page_info["SWL"] = wwl
+                    try:
+                        manufacturer, model = get_manufacture_model(manufacturer_data)
+                        model = get_manufacture_model(description)
+                        if not manufacturer:
+                            errors.append("Manufacturer not found")
+                        else:
+                            page_info["Manufacturer"] = manufacturer
+                        if not model:
+                            errors.append("Model not found")
+                        else:
+                            page_info["Model"] = model
+                    except Exception as e:
+                        errors.append(e)
+                    if wwl:
+                        try:
+                            swl_value, swl_unit, swl_note = process_swl(wwl)
+                            if not swl_value:
+                                errors.append("SWL Value not found")
+                            else:
+                                page_info["SWL Value"] = swl_value
+                            if not swl_unit:
+                                errors.append("SWL Unit not Found")
+                            else:
+                                page_info["SWL Unit"] = swl_unit
+                            page_info["SWL Note"] = swl_note
+                        except Exception as e:
+                            errors.append(e)
+                    else:
+                        errors.append("SWL not found in this page.")
                     page_info["Certificate No"] = certificate_no
                     page_info["Next Inspection Due Date"] = next_thorough
                     page_info["Provider Identification"] = provider
@@ -341,7 +412,7 @@ def extraction_centurion_pdf(pdf_path):
             print("No verified company found")
 
     print(len(extraction_info.keys()))
-    excel_management.update_excel(extraction_info, "Centurion")
+    excel_management.create_excel(extraction_info, "../database/Centurion.xlsx", "Centurion", page_errors)
 
 
 if __name__ == "__main__":
