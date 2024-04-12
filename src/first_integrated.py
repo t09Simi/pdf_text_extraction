@@ -11,13 +11,14 @@ def split_id_numbers_with_range(id_numbers):
     for id_number in id_numbers:
         match = re.match(r'([A-Za-z]+)(\d+)-(\d+)', id_number)
         if match:
+
             prefix_alpha = match.group(1)
             range_start = int(match.group(2))
             range_end = int(match.group(3))
             if range_end < range_start:
-                error_statement = f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}"
-                new_errors.append(error_statement)
-                #new_id_numbers.append(f"{prefix_alpha}{range_start}")
+                #error_statement = f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}"
+                new_errors.append(f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}")
+                new_id_numbers.append(f"{prefix_alpha}{range_start}")
             else:
                 for i in range(range_start, range_end + 1):
                     new_id_numbers.append(f"{prefix_alpha}{i}")
@@ -30,9 +31,8 @@ def split_id_numbers_with_range(id_numbers):
                 range_start = int(prefix_numeric)
                 range_end = int(match.group(3))
                 if range_end < range_start:
-                    #new_id_numbers.append(f"{prefix_alpha}{range_start}")
-                    error_statement = f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}"
-                    new_errors.append(error_statement)
+                    new_id_numbers.append(f"{prefix_alpha}/{range_start:02}")
+                    new_errors.append(f"Error: End of range ({range_end}) is less than start of range ({range_start}) for ID number {id_number}")
                 else:
                     # Generate new id numbers based on the matched pattern
                     for i in range(range_start, range_end + 1):
@@ -40,7 +40,37 @@ def split_id_numbers_with_range(id_numbers):
             else:
                 # If neither pattern matches, append the id_number as is
                 new_id_numbers.append(id_number)
-    return new_id_numbers
+    return new_id_numbers, new_errors
+
+
+def process_swl(swl: str):
+    pattern = r'^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s*(.*)$'
+    # Match the pattern
+    match = re.match(pattern, swl)
+
+    if match:
+        value_part = match.group(1)
+        unit_part = match.group(2)
+        note_part = match.group(3)
+    else:
+        value_part = None
+        unit_part = None
+        note_part = swl
+
+    units_map = {"TONNE": "te", "TONNES": "te", "Tonnes": "te", "Kilos": "kg"}
+    if unit_part in units_map:
+        unit_part = units_map[unit_part]
+
+    # Check if part 2 is a unit type or not
+    units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
+             "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te",
+             "TONNE", "TONNES", "Kilos", "Tonnes"]
+    if unit_part and unit_part not in units:
+        note_part = unit_part + " " + note_part if note_part else unit_part
+        unit_part = None
+
+    return value_part, unit_part, note_part
 
 
 def get_manufacture_model(description: str):
@@ -145,23 +175,28 @@ def process_table_type1(page_tables, extraction_info):
                         #page_info["Id Number"] = id_number
 
                         # Extract SWL
-                        swl_match = swl_pattern.search(row_text)
-                        if swl_match:
+                        #swl_match = swl_pattern.search(row_text)
+                        if swl_pattern:
                             try:
-                                swl_value = swl_match.group(1)
-                                swl_units = swl_match.group(2)
-                                swl_note = None
-                                page_info["SWL Value"] = swl_value
-                                page_info["SWL Unit"] = swl_units
-                                page_info["SWL Note"] = swl_note
+                                swl_match = swl_pattern.search(row_text)
+                                if swl_match:
+                                    swl_part = swl_match.group(0)
+                                    swl_value, swl_unit, swl_note = process_swl(swl_part)
+                                    page_info["SWL Value"] = swl_value
+                                    page_info["SWL Unit"] = swl_unit
+                                    page_info["SWL Note"] = swl_note
                             except Exception as e:
                                 errors.append("Error extracting SWL: {e}")
 
                         # Extract Description between ID Number and SWL
                         if id_match:
                             start_index = id_match.end()
-                            if swl_match:
-                                end_index = swl_match.start()
+                            if swl_pattern:
+                                swl_match = swl_pattern.search(row_text)
+                                if swl_match:
+                                    end_index = swl_match.start()
+                                else:
+                                    end_index = -1
                             else:
                                 end_index = -1
                             try:
@@ -202,6 +237,9 @@ def process_table_type1(page_tables, extraction_info):
                             except Exception as e:
                                 errors.append("Error extracting Next Inspection date: {e}")
                             #print("Next Inspection Date:", next_inspection_match)
+                        if errors:
+                            errors.append(f"for ID: {id_number}")
+                            page_info["Errors"] = str(errors)
 
                         row_data[id_number] = page_info
 
@@ -256,13 +294,13 @@ def process_table_type1(page_tables, extraction_info):
 
 def process_table_type2(table, extraction_info):
     try:
-        page_info = {}
         page_errors = dict()
-        errors = list()
+        page_info = {}
         id_number, description = None, None
         report_number_pattern = re.compile(r'Report\s*Number:', re.IGNORECASE)
         for page_num, row_outer in enumerate(table):
             try:
+                errors = list()
                 #print("row_outer", row_outer)
                 for cell in row_outer:
                     if cell:
@@ -282,15 +320,17 @@ def process_table_type2(table, extraction_info):
                                     else:
                                         id_number_list = []
                                         if "-" in id_number:
-                                            split_id_numbers = split_id_numbers_with_range([id_number])
-                                            print("new_id_numbers", split_id_numbers)
+                                            split_id_numbers, additional_errors = split_id_numbers_with_range([id_number])
+                                            if additional_errors:
+                                                for error in additional_errors:
+                                                    errors.append(error)
                                             id_number_list.extend(split_id_numbers)
-                                            print("id_number_list", id_number_list)
                                         else:
                                             id_number_list.append(id_number)
+
                                         for id_number in id_number_list:
-                                            #print("id_number_list", id_number)
                                             extraction_info[id_number] = page_info
+
                             except Exception as e:
                                 errors.append(f"Error extracting ID Number or Description: {e}")
                             #Get manufacture and model from description
@@ -315,11 +355,10 @@ def process_table_type2(table, extraction_info):
                                     swl_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(TONNE|TONNES)\b', re.IGNORECASE)
                                     swl_match = swl_pattern.search(wll)
                                     if swl_match:
-                                        swl_value = swl_match.group(1)
-                                        swl_units = swl_match.group(2)
-                                        swl_note = None
+                                        swl_part = swl_match.group(0)
+                                        swl_value, swl_unit, swl_note = process_swl(swl_part)
                                         page_info["SWL Value"] = swl_value
-                                        page_info["SWL Unit"] = swl_units
+                                        page_info["SWL Unit"] = swl_unit
                                         page_info["SWL Note"] = swl_note
                             except Exception as e:
                                 errors.append(f"Error extracting SWL: {e}")
@@ -353,13 +392,13 @@ def process_table_type2(table, extraction_info):
                             except Exception as e:
                                 errors.append(f"Error extracting Next Inspection: {e}")
 
+                if errors:
+                    errors.append(f"for ID: {id_number}")
+                    page_info["Errors"] = str(errors)
+
             except Exception as e:
                 page_errors[page_num] = "Error", e, " occurred while processing the page:"
                 print("Error", e, " occurred while processing the page:", page_num)
-
-            if errors:
-                errors.append("page no: " + str(page_num + 1))
-                page_info["Errors"] = str(errors)
 
     except Exception as e:
         print("Error occurred in process_table_type2:", e)
@@ -386,12 +425,17 @@ def process_table_type3(table, extraction_info):
                                         id_number = id_number_row[j].strip() if j < len(id_number_row) else None
                                         id_number_list = []
                                         if "-" in id_number:
-                                            split_id_numbers = split_id_numbers_with_range([id_number])
+                                            split_id_numbers, additional_errors = split_id_numbers_with_range([id_number])
+                                            if additional_errors:
+                                                # Handle errors here
+                                                for error in additional_errors:
+                                                    errors.append(error)
                                             id_number_list.extend(split_id_numbers)
                                         else:
                                             id_number_list.append(id_number)
                                         for id_number in id_number_list:
                                             extraction_info[id_number] = page_info
+
                                     elif not id_number_row:
                                         errors.append("Id Number not found")
                                 except Exception as e:
@@ -432,10 +476,11 @@ def process_table_type3(table, extraction_info):
                                         swl_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(TONNE|TONNES)\b', re.IGNORECASE)
                                         swl_match = swl_pattern.search(wll)
                                         if swl_match:
-                                            swl_value = swl_match.group(1)
-                                            swl_units = swl_match.group(2)
+                                            swl_part = swl_match.group(0)
+                                            swl_value, swl_unit, swl_note = process_swl(swl_part)
                                             page_info["SWL Value"] = swl_value
-                                            page_info["SWL Unit"] = swl_units
+                                            page_info["SWL Unit"] = swl_unit
+                                            page_info["SWL Note"] = swl_note
                                 except Exception as e:
                                     errors.append(f"Error extracting SWL: {e}")
                             elif "Certificate Number" in cell:
@@ -464,13 +509,13 @@ def process_table_type3(table, extraction_info):
                                 except Exception as e:
                                     errors.append(f"Error extracting Date of Declaration: {e}")
 
+                if errors:
+                    errors.append(f"for ID: {id_number}")
+                    page_info["Errors"] = str(errors)
+
             except Exception as e:
                 page_errors[i] = "Error", e, " occurred while processing the page:"
                 print("Error", e, " occurred while processing the page:", i)
-
-            if errors:
-                errors.append("page no: " + str(i + 1))
-                page_info["Errors"] = str(errors)
 
     except Exception as e:
         print("Error occurred in process_table_type3:", e)
