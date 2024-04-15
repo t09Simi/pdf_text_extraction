@@ -142,7 +142,7 @@ def extract_first_integrated_pdf(pdf_path):
             page_errors[i+1] = f"Error occurred on page {i+1}: {e}"
             print(f"Error occurred on page {i+1}: {e}")
 
-    excel_management.create_excel(extraction_info, "../../database/First Integrated.xlsx", "First_Integrated", page_errors)
+    excel_management.create_excel(extraction_info, "../database/First Integrated.xlsx", "First_Integrated", page_errors)
 
 
 def process_table_type1(page_tables, extraction_info):
