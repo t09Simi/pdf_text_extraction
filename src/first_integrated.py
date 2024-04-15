@@ -2,7 +2,7 @@ import re
 import pdfplumber
 from datetime import datetime, timedelta
 from openpyxl import load_workbook
-import excel_management
+from src import excel_management
 
 
 def split_id_numbers_with_range(id_numbers):
@@ -74,7 +74,7 @@ def process_swl(swl: str):
 
 
 def get_manufacture_model(description: str):
-    workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
+    workbook = load_workbook("../../database/Full_list_of_Manufacturers_and_Models.xlsx")
     sheet = workbook['Model']
 
     description_keywords = description.lower()
@@ -142,7 +142,7 @@ def extract_first_integrated_pdf(pdf_path):
             page_errors[i+1] = f"Error occurred on page {i+1}: {e}"
             print(f"Error occurred on page {i+1}: {e}")
 
-    excel_management.create_excel(extraction_info, "../database/First Integrated.xlsx", "First_Integrated", page_errors)
+    excel_management.create_excel(extraction_info, "../../database/First Integrated.xlsx", "First_Integrated", page_errors)
 
 
 def process_table_type1(page_tables, extraction_info):
