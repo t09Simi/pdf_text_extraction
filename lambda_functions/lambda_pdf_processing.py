@@ -91,7 +91,7 @@ def lambda_handler(event, context):
         pdf_file = s3.get_object(Bucket=source_bucket, Key=object_key)
         file_content = pdf_file['Body'].read()
         text_content = pdf_to_text(file_content)
-        keywords = ["Sparrows", "Centurion"]
+        keywords = ["Sparrows", "Centurion", "First Integrated"]
 
         if is_empty(text_content):
             print(f"No matching keyword found with existing clients, No procesing it, pushing this file to out failure folder")
@@ -103,6 +103,8 @@ def lambda_handler(event, context):
                 invoke_pdf_extraction_lambda(source_bucket, object_key, 'sparrow_extraction', file_content)
             elif found_keyword and found_keyword == "Centurion":
                 invoke_pdf_extraction_lambda(source_bucket, object_key, 'centurion_extraction', file_content)
+            elif found_keyword and found_keyword == "First Integrated":
+                invoke_pdf_extraction_lambda(source_bucket, object_key, 'first_integrated', file_content)
             else:
                 print(
                     f"No matching keyword found with existing clients, No procesing it, pushing this file to out failure folder")
