@@ -2,7 +2,7 @@ import re
 import pdfplumber
 from datetime import datetime, timedelta
 from openpyxl import load_workbook
-from src import excel_management
+import excel_management
 
 
 def split_id_numbers_with_range(id_numbers):

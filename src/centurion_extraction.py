@@ -50,7 +50,7 @@ def process_swl(swl: str):
     # Check if part 2 is a unit type or not
     units = ["kg", "g", "lb", "ton", "t", "m", "cm", "mm", "ft", "in", "m²", "cm²", "mm²", "ft²", "in²", "m³", "cm³", "mm³",
              "ft³", "in³", "km/h", "mph", "m/s", "kph", "°C", "°F", "°K", "bar", "atm", "Pa", "kPa", "psi", "N", "J",
-             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te"]
+             "W", "A", "V", "F", "Ω", "S", "H", "Hz", "C", "Bq", "Gy", "Sv", "cd", "lm", "lx", "B", "mol", "unit", "te", "KG", "T", "TE", "G", "TH /FITTING"]
     if unit_part and unit_part not in units:
         note_part = unit_part + " " + note_part if note_part else unit_part
         unit_part = None
@@ -105,6 +105,8 @@ def get_identification_number_list(identification_numbers: str, quantity: int):
                 identification_number_list.append(f"{id_number}-{i}")
     elif "," in identification_numbers:
         identification_number_list = identification_numbers.split(',')
+    elif "-" in identification_numbers and not identification_numbers.replace('-', '').isdigit():
+        identification_number_list.append(identification_numbers.strip())
 
     # print(identification_number_list)
     return identification_number_list
@@ -118,6 +120,26 @@ def extract_quantity(text):
         return None
 
 
+def extrac_serialnumber(cell_content):
+    serial_numbers_raw = cell_content.split(',')
+    serial_numbers_cleaned = []
+    for serial in serial_numbers_raw:
+        cleaned_serial = serial.strip()
+        match = re.search(r'(.+?)\s+-', cleaned_serial)
+        if match:
+            cleaned_serial = match.group(1).strip()
+        else:
+            cleaned_serial = cleaned_serial
+        cleaned_serial = cleaned_serial.replace(" ", "")
+        prefix = "SerialNo(s):"
+        if cleaned_serial.startswith(prefix):
+            cleaned_serial = cleaned_serial[len(prefix):]
+
+        serial_numbers_cleaned.append(cleaned_serial)
+        cleaned_serials_string = ','.join(serial_numbers_cleaned)
+    return cleaned_serials_string
+
+
 def extraction_centurion_pdf(pdf_path):
     print("<------------extracting centurion pdf------------>")
     pdf = pdfplumber.open(pdf_path)
@@ -128,21 +150,26 @@ def extraction_centurion_pdf(pdf_path):
         page = pdf.pages[i]
         if "Centurion" in text and "Hendrik" not in text:
             if page.extract_tables():
-                print("page number:", i)
-                page_tables = page.extract_tables()
-                first_table = page_tables[0]
-                # data1:Report Number / Date of Examination / Ref No
-                table_data1 = first_table[0][13]
-                # data2: Identify Company keywords
-                table_data2 = first_table[1]
-                # data3: Identify Text keywords
-                table_data3 = first_table[2]
-                # data4: Provide related Value
-                table_data4 = first_table[4]
-                # data5 ID number Value
-                table_data5 = first_table[5]
-                errors = list()
-                identification_number_list = list()
+                try:
+                    print("page number:", i)
+                    page_tables = page.extract_tables()
+                    first_table = page_tables[0]
+                    # data1:Report Number / Date of Examination / Ref No
+                    table_data1 = first_table[0][13]
+                    # data2: Identify Company keywords
+                    table_data2 = first_table[1]
+                    # data3: Identify Text keywords
+                    table_data3 = first_table[2]
+                    # data4: Provide related Value
+                    table_data4 = first_table[4]
+                    # data5 ID number Value
+                    table_data5 = first_table[5]
+                    full_serials = ' '.join([item for item in table_data5 if item is not None])
+                    errors = list()
+                    identification_number_list = list()
+                except Exception as e:
+                    print("Error extracting format from page:", e)
+                    continue
                 if "Quantity & Description of Equipment, Serial Numbers" in table_data3[0]:
 
                     id_numbers, description, mnfer, wwl, next_thorough = None, None, None, None, None
@@ -155,7 +182,9 @@ def extraction_centurion_pdf(pdf_path):
                             text_to_compare = table_data3[index].lower()
                             if not description and "description" in text_to_compare:
                                 description = table_data4[0].replace('\n', ' ')
-                                serial_numbers = table_data5[index].split(":")[-1].strip()
+                                serial_numbers = full_serials
+                                serial = re.sub(r'\s+', '', serial_numbers)
+                                serial_cleaned = extrac_serialnumber(serial)
                                 mnfer = table_data4[4].strip()
 
                             elif not wwl and "working" in text_to_compare:
@@ -168,6 +197,7 @@ def extraction_centurion_pdf(pdf_path):
                                 id_numbers = table_data4[index].strip()
                         except Exception as e:
                             print("Error extracting value from page:", e)
+
 
                     if id_numbers:
                         page_info = dict()
@@ -223,10 +253,10 @@ def extraction_centurion_pdf(pdf_path):
                                 table_data1_mapping[formattted_key] = value.strip()
 
                         page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
-                        page_info["Certificate No"] = page_info["Provider Identification"]
+                        page_info["Certificate No"] = table_data1_mapping["reportnumber"]
                         page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
 
-                        id_numbers = serial_numbers
+                        id_numbers = serial_cleaned
 
                         if quantity == 1:
                             identification_number_list.append(id_numbers)
@@ -245,7 +275,9 @@ def extraction_centurion_pdf(pdf_path):
                         text_to_compare = table_data3[index].lower()
                         if not description and "description" in text_to_compare:
                             description = table_data4[index].replace('\n', ' ')
-                            serial_numbers = table_data5[index].split(":")[-1].strip()
+                            serial_numbers = full_serials
+                            serial = re.sub(r'\s+', '', serial_numbers)
+                            serial_cleaned = extrac_serialnumber(serial)
                             quantity = extract_quantity(table_data4[index])
                             mnfer = table_data4[4].strip()
                         elif not wwl and "working" in text_to_compare:
@@ -256,6 +288,8 @@ def extraction_centurion_pdf(pdf_path):
                             next_thorough = date_obj.strftime("%d/%m/%Y")
                         elif not id_numbers and "certificate" in text_to_compare:
                             id_numbers = table_data4[index].strip()
+                            old_id = id_numbers
+                            id_numbers = serial_cleaned
 
                     if id_numbers:
                         page_info = dict()
@@ -294,10 +328,10 @@ def extraction_centurion_pdf(pdf_path):
                                 table_data1_mapping[formattted_key] = value.strip()
 
                         page_info["Provider Identification"] = table_data1_mapping["custrefpono"]
-                        page_info["Certificate No"] = page_info["Provider Identification"]
+                        page_info["Certificate No"] = table_data1_mapping["reportnumber"]
                         page_info["Previous Inspection"] = table_data1_mapping["dateofexamination"]
 
-                        id_numbers = serial_numbers
+
 
                         if quantity > 1:
                             identification_number_list = get_identification_number_list(id_numbers, quantity)
@@ -309,105 +343,6 @@ def extraction_centurion_pdf(pdf_path):
                     else:
                         print("No identification error")
 
-
-        elif "Hendrik" in text:
-            page = pdf.pages[i]
-            text = page.extract_text()
-
-            # data1: Certificate No.
-            certificate_no = None
-            certificate_match = re.search(r'Certificate No\. :\s*(\d+)', text)
-            if certificate_match:
-                print("page number:", i)
-                certificate_no = certificate_match.group(1)
-
-            page_tables = page.extract_tables()
-            first_table = page_tables[0]
-            # data2: wwl
-            table_data1 = first_table[3]
-            # data3: description, manufacturer
-            table_data2 = first_table[9]
-            table_data4 = first_table[10]
-            # data4: previous inspection
-            table_data3 = first_table[14]
-            # data5: ID Number
-            table_data5 = first_table[2]
-
-            identification_number_list = list()
-
-            id_numbers, wwl, pre_date = None, None, None
-            id_data = table_data5[0]
-            id_match = re.search(r'\)\s*([^\s]+)', id_data)
-            if id_match:
-                id_numbers = id_match.group(1)
-
-            wwl_data = table_data1[0]
-            wwl_match = re.search(r'(\d+(\.\d+)?\s*t)', wwl_data)
-            if wwl_match:
-                wwl = wwl_match.group(1)
-
-            pre_data = table_data3[0]
-            pre_match = re.search(r'(\d{2}-\d{2}-\d{4})', pre_data)
-            if pre_match:
-                pre_value = pre_match.group(1)
-                pre_date = pre_value.replace('-', '/')
-
-            description, next_thorough, provider, manufacturer, model = None, None, None, None, None
-            quantity = 1
-
-            for index in range(0, len(table_data2)):
-                if table_data2[index] is None:
-                    continue
-                text_to_compare = table_data2[index].lower()
-                if not description and 'description' in text_to_compare:
-                    description = table_data4[index].replace('\n', ' ')
-                    manufacturer_data = table_data4[2]
-
-            if id_numbers:
-                page_info = dict()
-                if description:
-                    page_info["Item Description"] = description.split(':')[0]
-                    try:
-                        manufacturer, model = get_manufacture_model(manufacturer_data)
-                        model = get_manufacture_model(description)
-                        if not manufacturer:
-                            errors.append("Manufacturer not found")
-                        else:
-                            page_info["Manufacturer"] = manufacturer
-                        if not model:
-                            errors.append("Model not found")
-                        else:
-                            page_info["Model"] = model
-                    except Exception as e:
-                        errors.append(e)
-                    if wwl:
-                        try:
-                            swl_value, swl_unit, swl_note = process_swl(wwl)
-                            if not swl_value:
-                                errors.append("SWL Value not found")
-                            else:
-                                page_info["SWL Value"] = swl_value
-                            if not swl_unit:
-                                errors.append("SWL Unit not Found")
-                            else:
-                                page_info["SWL Unit"] = swl_unit
-                            page_info["SWL Note"] = swl_note
-                        except Exception as e:
-                            errors.append(e)
-                    else:
-                        errors.append("SWL not found in this page.")
-                    page_info["Certificate No"] = certificate_no
-                    page_info["Next Inspection Due Date"] = next_thorough
-                    page_info["Provider Identification"] = provider
-                    page_info["Previous Inspection"] = pre_date
-
-                    if quantity == 1:
-                        identification_number_list.append(id_numbers)
-
-                    for identification_number in identification_number_list:
-                        extraction_info[identification_number] = page_info
-            else:
-                print("No identification error")
         else:
             print("No verified company found")
 
@@ -416,7 +351,7 @@ def extraction_centurion_pdf(pdf_path):
 
 
 if __name__ == "__main__":
-    extraction_centurion_pdf("../resources/centurion.pdf")
+    extraction_centurion_pdf("../resources/CenturionLoft.pdf")
 
 
 
