@@ -103,13 +103,21 @@ def get_identification_number_list(identification_numbers: str, quantity: int):
             count = int(''.join(filter(str.isdigit, num.split('x')[1].strip())))
             for i in range(1,count+1):
                 identification_number_list.append(f"{id_number}-{i}")
-    elif "," in identification_numbers:
-        identification_number_list = identification_numbers.split(',')
     elif "-" in identification_numbers and not identification_numbers.replace('-', '').isdigit():
-        identification_number_list.append(identification_numbers.strip())
 
-    # print(identification_number_list)
+        parts = identification_numbers.split("-")
+        if len(parts) == 2:
+            prefix_part = parts[0][:-1]
+            start_number = int(parts[0][-1])
+            end_number = int(parts[1])
+            identification_number_list = [
+                f"{prefix_part}{i}" for i in range(start_number, end_number + 1)
+            ]
+        else:
+            identification_number_list.append(identification_numbers.strip())
+
     return identification_number_list
+
 
 
 def extract_quantity(text):
@@ -291,6 +299,7 @@ def extraction_centurion_pdf(pdf_path):
                             old_id = id_numbers
                             id_numbers = serial_cleaned
 
+
                     if id_numbers:
                         page_info = dict()
                         if description:
@@ -339,7 +348,7 @@ def extraction_centurion_pdf(pdf_path):
                         for identification_number in identification_number_list:
                             extraction_info[identification_number] = page_info
 
-                        # print(identification_numbers, page_info)
+                        #
                     else:
                         print("No identification error")
 
