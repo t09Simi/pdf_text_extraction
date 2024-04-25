@@ -5,7 +5,7 @@ import excel_management
 
 
 def get_manufacture_model(description: str):
-    workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
+    workbook = load_workbook("database/Full_list_of_Manufacturers_and_Models.xlsx")
     manufacturer_sheet = workbook['Manufacture']
     model_sheet = workbook['Model']
     description_keywords = description.lower().split()
@@ -249,11 +249,11 @@ def extract_sparrow_pdf(pdf_path):
                 print("Error", {e}, " occurred while processing the page:", i)
 
         print(len(extraction_info.keys()), page_errors.keys())
-        excel_management.create_excel(extraction_info, "../database/Sparrows.xlsx", "Sparrows", page_errors)
+        excel_management.create_excel(extraction_info, "database/Sparrows.xlsx", "Sparrows", page_errors)
     except Exception as e:
         print("An error occurred:", e)
 
 
 if __name__ == "__main__":
-    extract_sparrow_pdf("../resources/sparrows.pdf")
+    extract_sparrow_pdf("resources/sparrows.pdf")
     # get_identification_number_list("A1 to A6", 8)

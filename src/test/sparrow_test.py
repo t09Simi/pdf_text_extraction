@@ -1,9 +1,12 @@
 import unittest
 import sys
+import os
 
+current_directory = os.getcwd()
+
+sys.path.append(os.path.join(current_directory,'src'))
 from sparrow_extraction import get_manufacture_model, get_identification_number_list,get_identification_parts_list,extract_sparrow_pdf
 
-sys.path.append("..")
 
 
 class TestSparrowExtraction(unittest.TestCase):
@@ -26,7 +29,7 @@ class TestSparrowExtraction(unittest.TestCase):
         self.assertEqual(["1", "2", "3", "4"], result)
 
     def test_extract_sparrow_pdf(self):
-        pdf_path = "../resources/centurion.pdf"
+        pdf_path = "resources/centurion.pdf"
         result = extract_sparrow_pdf(pdf_path)
         self.assertEqual(None, result)
 

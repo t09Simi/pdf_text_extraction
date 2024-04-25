@@ -6,7 +6,7 @@ from datetime import datetime
 import excel_management
 
 def get_manufacture_model(description: str):
-    workbook = load_workbook("../database/Full_list_of_Manufacturers_and_Models.xlsx")
+    workbook = load_workbook("database/Full_list_of_Manufacturers_and_Models.xlsx")
     manufacturer_sheet = workbook['Manufacture']
     model_sheet = workbook['Model']
     description_keywords = description.lower().split()
@@ -356,11 +356,11 @@ def extraction_centurion_pdf(pdf_path):
             print("No verified company found")
 
     print(len(extraction_info.keys()))
-    excel_management.create_excel(extraction_info, "../database/Centurion.xlsx", "Centurion", page_errors)
+    excel_management.create_excel(extraction_info, "database/Centurion.xlsx", "Centurion", page_errors)
 
 
 if __name__ == "__main__":
-    extraction_centurion_pdf("../resources/CenturionLoft.pdf")
+    extraction_centurion_pdf("resources/CenturionLoft.pdf")
 
 
 

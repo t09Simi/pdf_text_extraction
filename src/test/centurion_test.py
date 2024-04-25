@@ -1,19 +1,23 @@
 import unittest
 import sys
+import os
 
-from centurion_extraction import get_manufacture, extract_quantity, extraction_centurion_pdf, \
+current_directory = os.getcwd()
+print(current_directory)
+sys.path.append(os.path.join(current_directory,'src'))
+from centurion_extraction import get_manufacture_model, extract_quantity, extraction_centurion_pdf, \
     get_identification_parts_list, get_identification_number_list
 
-sys.path.append("..")
+
 
 
 class TestFunctions(unittest.TestCase):
-    def test_get_manufacture(self):
+    def test_get_manufacture_model(self):
         # Assume there is a valid description and expected output
         description = "CHAINBLOCK 1T 3M TIGER TCB14"
         expected_manufacturer = "TIGER"
         expected_model = "TCB14"
-        manufacturer, model = get_manufacture(description)
+        manufacturer, model = get_manufacture_model(description)
         self.assertEqual(manufacturer.lower(), expected_manufacturer.lower())
         self.assertEqual(model.lower(), expected_model.lower())
 
@@ -24,7 +28,7 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(quantity, expected_quantity)
 
     def test_extraction_centurion_pdf(self):
-        pdf_path = "../resources/centurion.pdf"
+        pdf_path = "resources/centurion.pdf"
         result = extraction_centurion_pdf(pdf_path)
         self.assertEqual(None, result)
 
