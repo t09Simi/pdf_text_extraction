@@ -38,19 +38,20 @@ Navigate to the AWS Lambda service in AWS Management Console and create the foll
 - excel_management.py
 - first_integrated.py
 
-__Code Upload:__
+Plese follow the being steps for each lambda function.
+1. __Code Upload:__
 Copy the respective code from lambda_functions directory and paste it in the code part of the created lambda function.
 
-__Code Deploy:__
+2. __Code Deploy:__
 Click on deploy button to deploy the code.
 
-__Add Lambda Layers:__
+3. __Add Lambda Layers:__
 Next click add layer button and add previously created two lambda layers to the functions.
 
-__Configuration:__
+4. __Configuration:__
 Now go to configuration tab and select general configuration. Set the memory, ephemeral storage and timeout to maximum provided value.
 
-__Permissions:__
+5. __Permissions:__
 Next go to permissions section in configuration tab and add the previously created IAM role to the functions.
 
 ### 5. Integrate SNS
@@ -61,7 +62,7 @@ Navigate to the AWS SNS service in AWS Management Console.
 Copy the ARN of the topic and paste it in the excel_management.py lambda function code. Look for the comments in the code for directions to add.
 
 
-### Configure Trigger
+### 6. Configure Trigger
 Navigate to the AWS Lambda service in AWS Management Console
 - Select pdf_processing lambda function
 - Next go to triggers section in configuration tab
@@ -70,7 +71,7 @@ Navigate to the AWS Lambda service in AWS Management Console
 
 ## Test Deployment
 
-### Upload PDF File
+### 1. Upload PDF File
 Navigate to the AWS S3 service in AWS Management Console
 - Select pdf-in-bucket from the buckets list
 - click on upload button
@@ -79,14 +80,14 @@ Navigate to the AWS S3 service in AWS Management Console
 - Finally, click the upload button to start uploading
 
 
-### Logging and Monitoring
+### 2. Logging and Monitoring
 Navigate to the AWS Cloudwatch service in AWS Management Console
 - Select log group under logs section
 - Select the log group you want to check among the list
 - Go to log stream tab and select the log stream file you want to open
 
 
-### Download generated excel file
+### 3. Download generated excel file
 Navigate to the AWS S3 service in AWS Management Console
 - Select excel-extraction-data from the buckets list
 - Navigate to the pdf uploaded date directory
